@@ -39,7 +39,7 @@ class ConfigParam(Generic[CP]):
         return ConfigTypedParam
 
 
-class ConfigNodeProperties(Generic[CR]):
+class ConfigNodeProps(Generic[CR]):
     PROPERTIES_NAME = '__node__'
 
     def __init__(self: CR, node: CN, name: str, parent: CN = None):
@@ -48,7 +48,7 @@ class ConfigNodeProperties(Generic[CR]):
         self.param_keys = set()
         self.set_parent(parent)
         self.set_name(name)
-        self.__set_properties()
+        self.__set_props()
 
     @property
     def node_cls(self):
@@ -59,10 +59,10 @@ class ConfigNodeProperties(Generic[CR]):
         return self.node_cls.__name__
 
     @classmethod
-    def get_properties(cls: Type[CR], node: CN) -> CR:
+    def get_props(cls: Type[CR], node: CN) -> CR:
         return getattr(node, cls.PROPERTIES_NAME)
 
-    def __set_properties(self: CR):
+    def __set_props(self: CR):
         setattr(self.node, self.PROPERTIES_NAME, self)
 
     def set_parent(self: CR, parent_node: Union[CN, None]):
@@ -73,7 +73,7 @@ class ConfigNodeProperties(Generic[CR]):
             # set the full path to this node as its name
         self.short_name = self.node_cls.__name__ if node_name is None else node_name
         self.long_name = (node_name if self.is_root() else
-                          f'{self.get_properties(self.parent).long_name}.{node_name}')
+                          f'{self.get_props(self.parent).long_name}.{node_name}')
 
     def get_annotations(self: CR) -> Dict[str, ConfigParam]:
         # these are all annotations for parameters for this node; we use
@@ -129,7 +129,7 @@ class ConfigNodeProperties(Generic[CR]):
         if self.is_root():
             return self
         else:
-            return self.get_properties(self.parent).get_root()
+            return self.get_props(self.parent).get_root()
 
     def get_children(self: CN) -> Iterable[CN]:
         """Get a iterable of all the subnodes to this config node"""
@@ -148,14 +148,14 @@ class ConfigNodeProperties(Generic[CR]):
                 self.config_vars.pop(0)
 
             for _, node in self.get_children():
-                self.get_properties(node).apply_vars()
+                self.get_props(node).apply_vars()
         except RecursionError:
             msg = ('Variables in your configuration cannot be resolved '
                    'due to cyclical assignments. Check your config!')
             raise RuntimeError(msg)
 
     def to_dict(self: CR) -> Dict[str, Any]:
-        return {k: (self.get_properties(v).to_dict() if isinstance(v, ConfigNode)
+        return {k: (self.get_props(v).to_dict() if isinstance(v, ConfigNode)
                     else (repr(v) if isinstance(v, ConfigPlaceholderVar) else v))
                 for k, v in self.node}
 
@@ -175,7 +175,7 @@ class ConfigNode(Generic[CN]):
         __name__: str = None
         ) -> None:
 
-        node_props = ConfigNodeProperties(node=self, name=__name__, parent=__parent__)
+        node_props = ConfigNodeProps(node=self, name=__name__, parent=__parent__)
 
         # get annnotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
@@ -311,7 +311,7 @@ class ConfigNode(Generic[CN]):
     def __iter__(self: CN) -> Iterable[Tuple[str, Any]]:
         """Get a iterable of names and parameters in this node, including subnodes"""
         yield from ((k, self[k]) for k in
-                    ConfigNodeProperties.get_properties(self).get_params_names())
+                    ConfigNodeProps.get_props(self).get_params_names())
 
     def __len__(self: CN) -> int:
         return sum(1 for _ in self)
@@ -370,7 +370,7 @@ class ConfigPlaceholderVar(Generic[CV]):
         # apply_vars to make sure that all substitutions in
         # the subnode are gracefully handled
         if isinstance(placeholder_substitution, ConfigNode):
-            ConfigNodeProperties.get_properties(placeholder_substitution).apply_vars()
+            ConfigNodeProps.get_props(placeholder_substitution).apply_vars()
 
         # note that we make a copy of the object to avoid
         # unwanted side effects
@@ -380,7 +380,7 @@ class ConfigPlaceholderVar(Generic[CV]):
             # we need to handle the case of a config node a bit
             # differently, including make sure that the lineage
             # and the parent of the new node are correctly set.
-            node_props = ConfigNodeProperties.get_properties(replaced_value)
+            node_props = ConfigNodeProps.get_props(replaced_value)
             node_props.set_parent(self.parent_node)
             node_props.set_name(self.param_name)
 
