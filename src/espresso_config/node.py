@@ -362,53 +362,27 @@ class ConfigPlaceholderVar(Generic[CV]):
         # this reduce function traverses the config from the
         # root node to get to the variable that we want
         # to use for substitution
-        sub = functools.reduce(
+        placeholder_substitution = functools.reduce(
             lambda node, key: node[key], self.var_path, root_node
         )
 
         # if the substitution is a full subnode, wee call
         # apply_vars to make sure that all substitutions in
         # the subnode are gracefully handled
-        if isinstance(sub, ConfigNode):
-            sub._apply_vars()
+        if isinstance(placeholder_substitution, ConfigNode):
+            ConfigNodeProperties.get_properties(placeholder_substitution).apply_vars()
 
+        # note that we make a copy of the object to avoid
+        # unwanted side effects
+        replaced_value = copy.deepcopy(placeholder_substitution)
 
-        if self.unresolved_param_value in placeholder_substitutions:
-            # the simplest replacement: the value we need to
-            # replace perfectly matches the key.
-
-            # note that we make a copy of the object to avoid
-            # unwanted side effects
-            replaced_value = copy.deepcopy(
-                placeholder_substitutions[self.unresolved_param_value]
-            )
-
-            if isinstance(replaced_value, ConfigNode):
-                # we need to handle the case of a config node a bit
-                # differently, including make sure that the lineage
-                # and the parent of the new node are correctly set.
-                replaced_value._set_parent(self.parent_node)
-                replaced_value._set_name(self.param_name)
-        else:
-            # this reduce operation replaces all variable instances in
-            # the value by using the replacements in var_subs.
-            # values are casted to string before being used for
-            # replacement.
-            replaced_value = functools.reduce(
-                lambda value, var_sub: value.replace(*map(str, var_sub)),
-                placeholder_substitutions.items(),
-                self.unresolved_param_value
-            )
-            if self.param_config is not None:
-                # we only cast if param_config has been provided.
-                replaced_value = self.param_config.type(replaced_value)
-
-        if (self.param_config is not None and not
-            isinstance(replaced_value, self.param_config.type)):
-            # checking if the type after casting is correct!
-            msg = ('After placeholder replacement, type is '
-                   f'"{type(replaced_value)}", not {self.param_config.type}')
-            raise TypeError(msg)
+        if isinstance(replaced_value, ConfigNode):
+            # we need to handle the case of a config node a bit
+            # differently, including make sure that the lineage
+            # and the parent of the new node are correctly set.
+            node_props = ConfigNodeProperties.get_properties(replaced_value)
+            node_props.set_parent(self.parent_node)
+            node_props.set_name(self.param_name)
 
         setattr(self.parent_node, self.param_name, replaced_value)
 
