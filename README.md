@@ -40,9 +40,6 @@ from espresso_config import (
     ConfigFlexNode
 )
 
-from espresso_config.node import LOGGER
-LOGGER.setLevel(logging.DEBUG)
-
 @ConfigRegistry.add
 class seq2seq(ConfigNode):
     _target_: ConfigParam(str) = 'transformers.AutoModelForSeq2SeqLM.from_pretrained'
@@ -55,7 +52,7 @@ class tok(ConfigNode):
 class rouge(ConfigNode):
     _target_: ConfigParam(str) = 'torchmetrics.functional.text.rouge.rouge_score'
 
-class config(ConfigNode):
+class ApplicationConfig(ConfigNode):
     backbone: ConfigParam(str)
     class model(ConfigNode):
         class transformer(ConfigNode):
@@ -79,7 +76,13 @@ model:
     rouge@rouge: {}
 ```
 
-voila!
+Voila! To load the config, run:
+
+```python
+from espresso_config import config_from_file
+
+config = config_from_file(ApplicationConfig, path_to_yaml)
+```
 
 ## Placeholder Variable
 

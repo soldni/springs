@@ -549,12 +549,3 @@ class ConfigFlexNode(ConfigNode):
         **kwargs: Dict[str, Any]
     ) -> None:
         super().__init__(*args, __flex_node__=True, **kwargs)
-
-
-
-def config_to_dict(config_node: ConfigNode, *args, **kwargs):
-    return ConfigNodeProps.get_props(config_node).to_dict(*args, **kwargs)
-
-
-def config_to_yaml(config_node: ConfigNode, *args, **kwargs):
-    return ConfigNodeProps.get_props(config_node).to_yaml(*args, **kwargs)
