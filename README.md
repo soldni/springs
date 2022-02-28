@@ -1,7 +1,14 @@
 # Espresso Config
 
 A struct config parser that you can set up in the time it
-takes to make an espresso.
+takes to make an espresso. To install, run
+
+```bash
+pip install espresso-config
+```
+
+Python 3.8 or newer is required.
+
 
 ## Motivating Example
 
