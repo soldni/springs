@@ -1,6 +1,5 @@
 import functools
 import logging
-from platform import node
 import re
 import copy
 import inspect
@@ -16,17 +15,26 @@ from typing import (
     Dict,
     Optional,
     TypeVar,
-    Generic
+    Generic,
+    get_type_hints
 )
 import yaml
 
-logging.basicConfig()
+from .utils import hybridmethod
+
+logging.basicConfig(format='')
 LOGGER = logging.getLogger(__name__)
 
 CN = TypeVar('CN', bound='ConfigNode')
 CV = TypeVar('CV', bound='ConfigPlaceholderVar')
 CP = TypeVar('CP', bound='ConfigParam')
-CR = TypeVar('CR', bound='ConfigNodeProperties')
+CR = TypeVar('CR', bound='ConfigNodeProps')
+CL = TypeVar('CL', bound='ConfigCliOverride')
+
+
+class ConfigCliOverride(Generic[CL]):
+    # TODO: implement in future versions.
+    ...
 
 
 class ConfigParam(Generic[CP]):
@@ -52,7 +60,7 @@ class ConfigNodeProps(Generic[CR]):
 
     @property
     def node_cls(self):
-        return self.node.__class__
+        return type(self.node)
 
     @property
     def cls_name(self):
@@ -63,6 +71,7 @@ class ConfigNodeProps(Generic[CR]):
         return getattr(node, cls.PROPERTIES_NAME)
 
     def __set_props(self: CR):
+        """Binds this property file to a node."""
         setattr(self.node, self.PROPERTIES_NAME, self)
 
     def set_parent(self: CR, parent_node: Union[CN, None]):
@@ -71,27 +80,43 @@ class ConfigNodeProps(Generic[CR]):
 
     def set_name(self: CR, node_name: Union[str, None]):
             # set the full path to this node as its name
-        self.short_name = self.node_cls.__name__ if node_name is None else node_name
-        self.long_name = (node_name if self.is_root() else
-                          f'{self.get_props(self.parent).long_name}.{node_name}')
+        self.short_name = self.cls_name if node_name is None else node_name
+        self.long_name = (self.short_name if self.is_root() else
+                          f'{self.get_props(self.parent).long_name}.{self.short_name}')
 
-    def get_annotations(self: CR) -> Dict[str, ConfigParam]:
+    @hybridmethod
+    def get_annotations(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, ConfigParam]:
         # these are all annotations for parameters for this node; we use
         # them to cast param values to the right type as we parse a config
         annotations = {name: annotation for name, annotation in
-                       getattr(self.node_cls, '__annotations__', {}).items()
+                       get_type_hints(node_cls).items()
                        if issubclass(annotation, ConfigParam)}
         return annotations
 
-    def get_defaults(self: CR) -> Dict[str, Any]:
+    @get_annotations.instancemethod
+    def get_annotations(self: CR) -> Dict[str, ConfigParam]:
+        return type(self).get_annotations(self.node_cls)
+
+    @hybridmethod
+    def get_defaults(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, Any]:
         # These are all the default values that have been provided
         # for the parameters for this node.
-        defaults = {name: self.node_cls.__dict__[name]
-                    for name in self.get_annotations()
-                    if name in self.node_cls.__dict__}
+
+        # We use getmembers instead of __dict__ because it
+        # resolves inheritance (__dict__ does not!)
+        all_members = dict(inspect.getmembers(node_cls))
+
+        defaults = {name: all_members[name]
+                    for name in cls.get_annotations(node_cls)
+                    if name in all_members}
         return defaults
 
-    def get_subnodes(self: CR) -> Dict[str, CN]:
+    @get_defaults.instancemethod
+    def get_defaults(self: CR) -> Dict[str, Any]:
+        return type(self).get_defaults(self.node_cls)
+
+    @hybridmethod
+    def get_subnodes(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, CN]:
         # these are almost all the subnodes for the node; for now, we
         # capture the ones that are of the form
         #   class node(ConfigNode):
@@ -102,21 +127,36 @@ class ConfigNodeProps(Generic[CR]):
         #   class node(ConfigNode):
         #     subnode: ConfigParam(FlexNode) = None
         #     ...
-        subnodes = {name: cls_ for name, cls_ in self.node_cls.__dict__.items()
+
+        # We use getmembers instead of __dict__ because it
+        # resolves inheritance (__dict__ does not!)
+        all_members = dict(inspect.getmembers(node_cls))
+        subnodes = {name: cls_ for name, cls_ in all_members.items()
                     if inspect.isclass(cls_) and issubclass(cls_, ConfigNode)}
         return subnodes
 
+    @get_subnodes.instancemethod
+    def get_subnodes(self: CR) -> Dict[str, CN]:
+        return type(self).get_subnodes(self.node_cls)
+
+    @hybridmethod
+    def get_all_cls_members(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, Any]:
+        return dict(inspect.getmembers(node_cls))
+
+    @get_all_cls_members.instancemethod
+    def get_all_cls_members(self: CR) -> Dict[str, Any]:
+        return type(self).get_all_cls_members(self.node_cls)
+
     def assign_param(self, name: str, value: Any):
         # printing some debug info
-        root = ' (root)' if self.is_root() else ''
-        LOGGER.debug(f'[{self.long_name}{root}] {name}={value}')
+        LOGGER.debug(f'[ASSIGN VAR][{self.long_name}][{self.cls_name}] {name}={value}')
 
         # do the actual assignment
         self.param_keys.add(name)
         setattr(self.node, name, value)
 
-    def get_params_names(self: CR) -> Iterable[str]:
-        yield from self.param_keys
+    def get_params_names(self: CR) -> Sequence[str]:
+        return tuple(self.param_keys)
 
     def add_var(self: CR, var: CV):
         self.config_vars.append(var)
@@ -127,7 +167,7 @@ class ConfigNodeProps(Generic[CR]):
     def get_root(self: CR) -> CN:
         """Traverse the configuration this node is part of to find the root node"""
         if self.is_root():
-            return self
+            return self.node
         else:
             return self.get_props(self.parent).get_root()
 
@@ -163,19 +203,48 @@ class ConfigNodeProps(Generic[CR]):
         return yaml.safe_dump(self.to_dict(), *args, **kwargs)
 
 
+class MetaConfigNode(type):
+    """A very simple metaclass for the config node that
+    implements operators `>>` and `<<` between subclasses
+    of ConfigNode.
 
-class ConfigNode(Generic[CN]):
+    `A >> B` merges A into B, meaning that, if a parameter
+    exists in both A and B, the version from A is kept.
+    `A << B` merges B in to A; it is equivalent to `B >> A`
+    """
+    def __rshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
+        class MergedClsClass(cls, other_cls):
+            ...
+        return MergedClsClass
+
+    def __lshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
+        return other_cls >> cls
+
+
+
+class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
     """A generic configuration node."""
 
     def __init__(
         self: CN,
         config: Optional[Dict[str, Any]] = None,
+        cli_overrides: Optional[Sequence[CL]] = None,
         __parent__ : CN = None,
         __flex_node__: bool = False,
         __name__: str = None
         ) -> None:
+        # Parsing comes in 5 phases, each one is in a separate code block!
 
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # This is mostly preliminaries:
+
+        # Create a property object for this node; the object will bind itself
+        # to
         node_props = ConfigNodeProps(node=self, name=__name__, parent=__parent__)
+
+        if cli_overrides:
+            # We don't support this yet, so raise an error!
+            raise NotImplementedError('CLI overrides are not supported yet!')
 
         # get annnotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
@@ -186,9 +255,15 @@ class ConfigNode(Generic[CN]):
 
         # if the config provided is empty, we try to make do with just default values
         config = config or {}
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # override with options that are provided in `config` argument
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Override with options that are provided in `config` dictionary
         for param_name, param_value in config.items():
+            # a little lambda function to log how we are doing
+            debug_call = lambda case: LOGGER.debug(
+                f'[PARSE CONFIG][{node_props.long_name}][{case}] {param_name}'
+            )
 
             if '@' in param_name:
                 # we have a registry reference! we need to extract the
@@ -209,6 +284,7 @@ class ConfigNode(Generic[CN]):
             if ((param_name not in annotations) and
                 (param_name not in subnodes) and
                 not(__flex_node__)):
+                debug_call('0.not_supported')
                 # CASE 0: we can't add this key to this config; raise an error.
                 msg = f'Parameter "{param_name}" not supported in "{node_props.cls_name}"'
                 raise KeyError(msg)
@@ -217,13 +293,31 @@ class ConfigNode(Generic[CN]):
                 # CASE 1: we just pulled a config object out of the registry! let's
                 #         use it to initialize the value for this parameter. we provide
                 #         the value of the config as an input.
+                debug_call('1.registry')
+
+                if param_name in subnodes:
+                    # CASE 1.1: beside the key with just loaded, we also have a subnode
+                    #           with potentially some default parameters! fear not, we
+                    #           merge configs using operator `>>`
+                    debug_call('1.1.registry+submodule')
+                    registry_config_cls = registry_config_cls >> subnodes[param_name]
+
+                if param_name in annotations and issubclass(annotations[param_name].type, ConfigNode):
+                    # CASE 1.2: we also need to merge with the type we also get from
+                    #           the parameter annotation. This is usually empty, but
+                    #           we merge with it for good measure too.
+                    debug_call('1.2.registry+annotation')
+                    registry_config_cls = registry_config_cls >> annotations[param_name].type
+
+                # Finally after a bunch of merging (maybe?), we can instantiate
+                # an object using the registry reference!
                 param_value = registry_config_cls(
                     param_value, __parent__=self, __name__=param_name
                 )
-
             elif ConfigPlaceholderVar.has_placeholder_var(param_value):
                 # CASE 2: you found a value with a variable in it; we save it with
                 #         the rest of the vars, and it will be resolved it later.
+                debug_call('2.variable')
                 param_value = ConfigPlaceholderVar(
                     parent_node=self,
                     param_name=param_name,
@@ -234,6 +328,7 @@ class ConfigNode(Generic[CN]):
             elif param_name in annotations:
                 # CASE 3: you found a value for with we have a type annotation!
                 #         you cast to that type and add it to the node.
+                debug_call('3.annotation')
 
                 # we do different things depending on what the type of the
                 # parameter is, so we first extract the type.
@@ -244,14 +339,17 @@ class ConfigNode(Generic[CN]):
                     #           or a subclass of it, making necessary to pass some extra
                     #           parameters to the constructor instead of just
                     #           `param_value`. we accomplish that with a partial decorator.
+                    debug_call('3.1.ann_subnode')
                     param_type = functools.partial(
                         param_type, __parent__=self, __name__=param_name
                     )
-                param_value = param_type(param_value)
 
+                param_value = param_type(param_value)
             elif param_name in subnodes:
                 # CASE 4: This parameter corresponds to a subnode! we create
                 #         the subnode and set that as parameter value
+                debug_call('4.subnode')
+
                 param_value = subnodes[param_name](
                     config=param_value, __parent__=self, __name__=param_name
                 )
@@ -259,26 +357,46 @@ class ConfigNode(Generic[CN]):
                 # CASE 5: I don't recognize this key, but I'm in flex config mode
                 #         so I'll just add it to this node object (config_value
                 #         is already asssigned, that's why we just pass here).
-                pass
+                debug_call('5.unrecognized')
             else:
                 # CASE ∞: Something went wrong and you reached a technically
                 #         unreachable branch! Someone will have to investigate.
+                debug_call('∞.dead_end')
                 msg = 'Unreachable! Please file an issue.'
                 raise RuntimeError(msg)
 
             # add parameter to set of parameters in this node and assign it
             node_props.assign_param(name=param_name, value=param_value)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # try using default values for parameters with no override
-        for param_name in annotations:
-            if param_name in config:
-                # this parameter is already assigned
-                continue
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Try using default values for parameters with no override. To find
+        # which parameters are still missing, we get a tuple of parameter names
+        # initialized so far from the node properties object; then we use it
+        # to remove parameter names from the set of all annotations.
+        missing_params = set(annotations).difference(set(node_props.get_params_names()))
+
+        for param_name in missing_params:
             if param_name not in defaults:
-                msg = f'parameter "{param_name}" missing for "{node_props.cls_name}"'
+                # This parameter was not overwritten by the configuration
+                # provided to this __init__ method; however, the paramer
+                # doesn't have a default, so we need to raise an error.
+                msg = f'parameter "{param_name}" is missing for "{node_props.cls_name}"'
                 raise ValueError(msg)
 
+            # We got lucky! We found a default value for this annotated
+            # parameter!
+            #
+            # We first make a copy of the parameter value; we don't want
+            # a user to accidentally override a class by modifying an
+            # attribute of a config instance!
             param_value = copy.deepcopy(defaults[param_name])
+
+            # Like before, we check if this is a placeholder var; if
+            # it is, we need to instantitate it and use it as parameter
+            # value so it can be resolved later. We also add it to the
+            # registry of all the placeholder variables, which is
+            # in the node properties.
             if ConfigPlaceholderVar.has_placeholder_var(param_value):
                 param_value = ConfigPlaceholderVar(
                     parent_node=self,
@@ -291,30 +409,46 @@ class ConfigNode(Generic[CN]):
             # add parameter to set of parameters in this node and
             # assign its DEFAULT VALUE
             node_props.assign_param(name=param_name, value=param_value)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # try instantitate nodes with no overrides
-        for param_name, subnode_cls in subnodes.items():
-            if param_name in config:
-                # this parameter is already assigned
-                continue
-            param_value = subnode_cls(__parent__=self, __name__=param_name)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Last set of assignments! Like we did with annotations, we need to
+        # check if there are one or more submodules that have not been initialized
+        # already through the config provided by the user.
+        missing_subnodes = set(annotations).difference(set(node_props.get_params_names()))
 
-            # add the subnode to the config!
+        for param_name in missing_subnodes:
+            # initialize the subnode here
+            param_value = subnodes[param_name](__parent__=self, __name__=param_name)
+
+            # add the subnode to the config
             node_props.assign_param(name=param_name, value=param_value)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # finally, if this is a root class, we want to take care of replacing
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Finally, if this is a root class, we want to take care of replacing
         # variables with actual values; not going to do any late binding a la
         # hydra, with some minimal logic to catch cyclical assignments
         if node_props.is_root():
             node_props.apply_vars()
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     def __iter__(self: CN) -> Iterable[Tuple[str, Any]]:
         """Get a iterable of names and parameters in this node, including subnodes"""
         yield from ((k, self[k]) for k in
                     ConfigNodeProps.get_props(self).get_params_names())
 
+    def __getitem__(self, key: str) -> Any:
+        node_props = ConfigNodeProps.get_props(self)
+        node_props.cls_name
+        if key in node_props.get_params_names():
+            return getattr(self, key)
+        else:
+            raise KeyError(f'`{key}` is not a parameter in {node_props.cls_name}')
+
     def __len__(self: CN) -> int:
         return sum(1 for _ in self)
+
 
 
 class ConfigPlaceholderVar(Generic[CV]):
@@ -357,7 +491,7 @@ class ConfigPlaceholderVar(Generic[CV]):
         """Replace variables in this value with their actual value"""
 
         # we need to start looking from the root
-        root_node = self.parent_node._get_root()
+        root_node = ConfigNodeProps.get_props(self.parent_node).get_root()
 
         # this reduce function traverses the config from the
         # root node to get to the variable that we want
@@ -405,3 +539,12 @@ class ConfigFlexNode(ConfigNode):
         **kwargs: Dict[str, Any]
     ) -> None:
         super().__init__(*args, __flex_node__=True, **kwargs)
+
+
+
+def config_to_dict(config_node: ConfigNode, *args, **kwargs):
+    return ConfigNodeProps.get_props(config_node).to_dict(*args, **kwargs)
+
+
+def config_to_yaml(config_node: ConfigNode, *args, **kwargs):
+    return ConfigNodeProps.get_props(config_node).to_yaml(*args, **kwargs)
