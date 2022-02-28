@@ -1,3 +1,4 @@
+from email.policy import default
 import functools
 import logging
 import re
@@ -16,25 +17,35 @@ from typing import (
     Optional,
     TypeVar,
     Generic,
+    NamedTuple,
     get_type_hints
 )
 import yaml
 
-from .utils import hybridmethod
+from .utils import hybridmethod, MISSING
 
-logging.basicConfig(format='')
+
+# get logger for this file, mostly used for debugging
 LOGGER = logging.getLogger(__name__)
 
+
+# Type declaration for classes
 CN = TypeVar('CN', bound='ConfigNode')
 CV = TypeVar('CV', bound='ConfigPlaceholderVar')
 CP = TypeVar('CP', bound='ConfigParam')
 CR = TypeVar('CR', bound='ConfigNodeProps')
-CL = TypeVar('CL', bound='ConfigCliOverride')
 
 
-class ConfigCliOverride(Generic[CL]):
-    # TODO: implement in future versions.
-    ...
+# Constants
+CONFIG_NODE_PROPERTIES_NAME = '__node__'
+CONFIG_NODE_REGISTRY_SEPARATOR = '@'
+CONFIG_PLACEHOLDER_VAR_TEMPLATE = r'^\$\{(([a-zA-Z_]\w*)\.?)+\}$'
+
+
+class ParameterSpec(NamedTuple):
+    name: str
+    default: Any
+    type: Type[Any]
 
 
 class ConfigParam(Generic[CP]):
@@ -48,8 +59,6 @@ class ConfigParam(Generic[CP]):
 
 
 class ConfigNodeProps(Generic[CR]):
-    PROPERTIES_NAME = '__node__'
-
     def __init__(self: CR, node: CN, name: str, parent: CN = None):
         self.node = node
         self.config_vars = []
@@ -68,11 +77,11 @@ class ConfigNodeProps(Generic[CR]):
 
     @classmethod
     def get_props(cls: Type[CR], node: CN) -> CR:
-        return getattr(node, cls.PROPERTIES_NAME)
+        return getattr(node, CONFIG_NODE_PROPERTIES_NAME)
 
     def __set_props(self: CR):
         """Binds this property file to a node."""
-        setattr(self.node, self.PROPERTIES_NAME, self)
+        setattr(self.node, CONFIG_NODE_PROPERTIES_NAME, self)
 
     def set_parent(self: CR, parent_node: Union[CN, None]):
         # keep track of which is the root node for this config
@@ -146,6 +155,37 @@ class ConfigNodeProps(Generic[CR]):
     @get_all_cls_members.instancemethod
     def get_all_cls_members(self: CR) -> Dict[str, Any]:
         return type(self).get_all_cls_members(self.node_cls)
+
+    @hybridmethod
+    def get_all_parameters(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, ParameterSpec]:
+        """Get all parameters for this node as well as for its subnodes."""
+
+        all_parameters = []
+
+        annotations = cls.get_annotations(node_cls)
+        defaults = cls.get_defaults(node_cls)
+
+        for param_name, param_annotation in annotations.items():
+
+            all_parameters.append(
+                ParameterSpec(name=param_name,
+                              type=param_annotation.type,
+                              default=defaults.get(param_name, MISSING))
+            )
+
+        for subnode_name, subnode_cls in cls.get_subnodes(node_cls).items():
+            for param_spec in cls.get_all_parameters(subnode_cls):
+                all_parameters.append(
+                    ParameterSpec(name=f'{subnode_name}.{param_spec.name}',
+                                  type=param_spec.type,
+                                  default=param_spec.default)
+                )
+
+        return all_parameters
+
+    @get_all_parameters.instancemethod
+    def get_all_parameters(self: CR) -> Dict[str, ParameterSpec]:
+        return type(self).get_all_parameters(self.node_cls)
 
     def assign_param(self, name: str, value: Any):
         # printing some debug info
@@ -221,14 +261,12 @@ class MetaConfigNode(type):
         return other_cls >> cls
 
 
-
 class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
     """A generic configuration node."""
 
     def __init__(
         self: CN,
         config: Optional[Dict[str, Any]] = None,
-        cli_overrides: Optional[Sequence[CL]] = None,
         __parent__ : CN = None,
         __flex_node__: bool = False,
         __name__: str = None
@@ -236,15 +274,10 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # Parsing comes in 5 phases, each one is in a separate code block!
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # This is mostly preliminaries:
+        # This is mostly preliminaries
 
-        # Create a property object for this node; the object will bind itself
-        # to
+        # Create a property object for this node; the object will bind itself to it
         node_props = ConfigNodeProps(node=self, name=__name__, parent=__parent__)
-
-        if cli_overrides:
-            # We don't support this yet, so raise an error!
-            raise NotImplementedError('CLI overrides are not supported yet!')
 
         # get annnotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
@@ -271,7 +304,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 f'[PARSE CONFIG][{node_props.long_name}][{case}] {param_name}'
             )
 
-            if '@' in param_name:
+            if CONFIG_NODE_REGISTRY_SEPARATOR in param_name:
                 # we have a registry reference! we need to extract the
                 # reference and get the config from the registry.
 
@@ -469,8 +502,6 @@ class ConfigPlaceholderVar(Generic[CV]):
     to find suitable replacement values for the placeholder.
     """
 
-    VAR_TEMPLATE = r'^\$\{(([a-zA-Z_]\w*)\.?)+\}$'
-
     def __init__(
         self: CV,
         parent_node: ConfigNode,
@@ -484,7 +515,9 @@ class ConfigPlaceholderVar(Generic[CV]):
         self.param_config = param_config
         self.placeholder_vars = {}
 
-        self.var_match = re.match(self.VAR_TEMPLATE, param_value).group()
+        self.var_match = re.match(
+            CONFIG_PLACEHOLDER_VAR_TEMPLATE, param_value
+        ).group()
         self.var_path = tuple(self.var_match[2:-1].split('.'))
 
     def __repr__(self: CV) -> str:
@@ -534,9 +567,8 @@ class ConfigPlaceholderVar(Generic[CV]):
     def has_placeholder_var(cls: Type[CV], value: Any) -> bool:
         """Returns True if value has variable (${...})
            somewhere, False otherwise"""
-        if isinstance(value, str) and re.findall(cls.VAR_TEMPLATE, value):
-            return True
-        return False
+        return (isinstance(value, str) and
+                re.findall(CONFIG_PLACEHOLDER_VAR_TEMPLATE, value))
 
 
 class ConfigFlexNode(ConfigNode):
