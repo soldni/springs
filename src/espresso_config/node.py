@@ -253,8 +253,14 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         defaults = node_props.get_defaults()
         subnodes = node_props.get_subnodes()
 
-        # if the config provided is empty, we try to make do with just default values
+        # if the config provided is empty, we try to make do with just default
+        # values; we also check if it is of the right type (otherwise if it is
+        # not the user will get inscrutable errors down the line).
         config = config or {}
+        if not isinstance(config, dict):
+            msg = (f'Config to `{node_props.cls_name}` should be dict, '
+                   f'but received {type(config)} instead!')
+            raise ValueError(msg)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -402,7 +408,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     parent_node=self,
                     param_name=param_name,
                     param_value=param_value,
-                    annotation=annotations[param_name]
+                    param_config=annotations[param_name]
                 )
                 node_props.add_var(param_value)
 
@@ -517,6 +523,10 @@ class ConfigPlaceholderVar(Generic[CV]):
             node_props = ConfigNodeProps.get_props(replaced_value)
             node_props.set_parent(self.parent_node)
             node_props.set_name(self.param_name)
+        else:
+            # if is not a node, but a simple value, we use the specified
+            # type to cast if necessary.
+            replaced_value = self.param_config.type(replaced_value)
 
         setattr(self.parent_node, self.param_name, replaced_value)
 
