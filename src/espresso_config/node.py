@@ -454,7 +454,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # Last set of assignments! Like we did with annotations, we need to
         # check if there are one or more submodules that have not been initialized
         # already through the config provided by the user.
-        missing_subnodes = set(annotations).difference(set(node_props.get_params_names()))
+        missing_subnodes = set(subnodes).difference(set(node_props.get_params_names()))
 
         for param_name in missing_subnodes:
             # initialize the subnode here
@@ -512,7 +512,8 @@ class ConfigPlaceholderVar(Generic[CV]):
         self.param_name = param_name
         self.parent_node = parent_node
         self.unresolved_param_value = param_value
-        self.param_config = param_config
+        self.param_config_type = (param_config.type if param_config
+                                  is not None else lambda x: x)
         self.placeholder_vars = {}
 
         self.var_match = re.match(
@@ -559,7 +560,7 @@ class ConfigPlaceholderVar(Generic[CV]):
         else:
             # if is not a node, but a simple value, we use the specified
             # type to cast if necessary.
-            replaced_value = self.param_config.type(replaced_value)
+            replaced_value = self.param_config_type(replaced_value)
 
         setattr(self.parent_node, self.param_name, replaced_value)
 
