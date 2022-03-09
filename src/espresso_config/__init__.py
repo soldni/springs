@@ -12,3 +12,4 @@ from .functional import (
     config_to_program
 )
 from . import defaults
+from .instantiate import instantitate
