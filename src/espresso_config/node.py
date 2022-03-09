@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from email.policy import default
 import functools
 import logging
@@ -39,7 +40,7 @@ CR = TypeVar('CR', bound='ConfigNodeProps')
 # Constants
 CONFIG_NODE_PROPERTIES_NAME = '__node__'
 CONFIG_NODE_REGISTRY_SEPARATOR = '@'
-CONFIG_PLACEHOLDER_VAR_TEMPLATE = r'^\$\{(([a-zA-Z_]\w*)\.?)+\}$'
+CONFIG_PLACEHOLDER_VAR_TEMPLATE = r'\$\{(([a-zA-Z_]\w*)\.?)*(@[a-zA-Z_]+){0,1}\}'
 
 
 class ParameterSpec(NamedTuple):
@@ -490,6 +491,13 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
 
 
 
+@dataclass
+class VarMatch:
+    path: Sequence[str]
+    match: str
+    registry: Optional[str] = None
+
+
 class ConfigPlaceholderVar(Generic[CV]):
     """A Placeholder for config values that contains a variable.
     Placeholder variables are specified using the following format:
@@ -514,12 +522,37 @@ class ConfigPlaceholderVar(Generic[CV]):
         self.unresolved_param_value = param_value
         self.param_config_type = (param_config.type if param_config
                                   is not None else lambda x: x)
-        self.placeholder_vars = {}
+        self.placeholder_vars = []
 
-        self.var_match = re.match(
-            CONFIG_PLACEHOLDER_VAR_TEMPLATE, param_value
-        ).group()
-        self.var_path = tuple(self.var_match[2:-1].split('.'))
+        # import here to avoid cycles
+        from espresso_config.registry import ConfigRegistry
+
+        for match in re.finditer(CONFIG_PLACEHOLDER_VAR_TEMPLATE, param_value):
+            var_path_and_registry = match.group()[2:-1]
+            if var_path_and_registry == '':
+                # CASE 0: the regex matches even in cases the variable
+                #         placeholder is "${}", so we raise an error for
+                #         that here.
+                msg = (f'Variable placeholder `{match.group()}` in '
+                       f'"{param_value}" cannot be parsed.')
+                raise ValueError(msg)
+            elif CONFIG_NODE_REGISTRY_SEPARATOR in var_path_and_registry:
+                # CASE 1: we have a registry reference! two possible cases:
+                #           2.1. no variable placeholder, e.g.:
+                #                   foo: ${@__timestamp__}
+                #           2.2. we have a placeholder, e.g.
+                #                   path: ${var.to.relpath@__fullpath__}
+                var_path, registry_name = var_path_and_registry.split('@')
+                registry = ConfigRegistry.get(registry_name)
+            else:
+                # CASE 2: no registry reference; we simply set it to none
+                var_path, registry = var_path_and_registry, None
+
+            # handle case 2.1 here (no placeholder)
+            var_path = var_path.split('.') if len(var_path) else None
+            self.placeholder_vars.append(VarMatch(path=var_path,
+                                                  registry=registry,
+                                                  match=match.group()))
 
     def __repr__(self: CV) -> str:
         return self.__str__()
@@ -533,22 +566,53 @@ class ConfigPlaceholderVar(Generic[CV]):
         # we need to start looking from the root
         root_node = ConfigNodeProps.get_props(self.parent_node).get_root()
 
-        # this reduce function traverses the config from the
-        # root node to get to the variable that we want
-        # to use for substitution
-        placeholder_substitution = functools.reduce(
-            lambda node, key: node[key], self.var_path, root_node
-        )
+        replaced_value = self.unresolved_param_value
 
-        # if the substitution is a full subnode, wee call
-        # apply_vars to make sure that all substitutions in
-        # the subnode are gracefully handled
-        if isinstance(placeholder_substitution, ConfigNode):
-            ConfigNodeProps.get_props(placeholder_substitution).apply_vars()
+        while len(self.placeholder_vars) > 0:
+            var_match: VarMatch = self.placeholder_vars.pop(0)
 
-        # note that we make a copy of the object to avoid
-        # unwanted side effects
-        replaced_value = copy.deepcopy(placeholder_substitution)
+            if var_match.path:
+                # this reduce function traverses the config from the
+                # root node to get to the variable that we want
+                # to use for substitution
+                placeholder_substitution = functools.reduce(
+                    lambda node, key: node[key], var_match.path, root_node
+                )
+            else:
+                # this is a registry reference with no placeholder
+                # variable; we set the placeholder substitution to None
+                placeholder_substitution = None
+
+            # if the substitution is a full subnode, wee call
+            # apply_vars to make sure that all substitutions in
+            # the subnode are gracefully handled.
+            if isinstance(placeholder_substitution, ConfigNode):
+                ConfigNodeProps.get_props(placeholder_substitution).apply_vars()
+
+            # we make a copy of the object to avoid unwanted side effects
+            placeholder_substitution = copy.deepcopy(placeholder_substitution)
+
+            if var_match.registry is not None:
+                # the user has asked for registry reference call, so
+                # we oblige. note that we do not pass in any args if
+                # there was no placeholder variable
+                args = (placeholder_substitution, ) if var_match.path else tuple()
+                placeholder_substitution = var_match.registry(*args)
+
+            if var_match.match == self.unresolved_param_value:
+                # the placeholder variable is the entire string, e.g.:
+                #   foo: ${bar}
+                # we simply set replaced value to it and call it a day
+                replaced_value = placeholder_substitution
+            else:
+                # in this case, the placeholder variable is combined
+                # with other variables or strings, e.g.
+                #   foo: ${bar}_{$baz}
+                # so we replace where appropriate. Note that we cast
+                # to string first so that there are no errors when subbing
+                placeholder_substitution = str(placeholder_substitution)
+                replaced_value = replaced_value.\
+                    replace(var_match.match, placeholder_substitution)
 
         if isinstance(replaced_value, ConfigNode):
             # we need to handle the case of a config node a bit

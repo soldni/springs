@@ -5,17 +5,21 @@ from typing import Type, Callable, Generic, TypeVar, Union
 from espresso_config.node import ConfigNode
 
 CR = TypeVar('CR', bound='ConfigRegistry')
+RegistrableType = Union[Type[ConfigNode],Callable]
 
 
 class ConfigRegistry(Generic[CR]):
     __registry__ = {}
 
     @classmethod
-    def add(cls, config_node_cls: Type[ConfigNode]) -> ConfigNode:
-        if not(inspect.isclass(config_node_cls) and
-               issubclass(config_node_cls, ConfigNode)):
+    def add(cls, config_node_cls: RegistrableType) -> ConfigNode:
+        is_node_config = (inspect.isclass(config_node_cls) and
+                          issubclass(config_node_cls, ConfigNode))
+        is_callable = isinstance(config_node_cls, Callable)
+
+        if not(is_node_config or is_callable):
             msg = (f'`config_node_cls` must be a ConfigNode '
-                   f'class, not `{type(config_node_cls)}`')
+                   f'class or callable fn, not `{type(config_node_cls)}`')
             raise TypeError(msg)
 
         name = config_node_cls.__name__

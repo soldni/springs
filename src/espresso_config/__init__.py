@@ -11,3 +11,4 @@ from .functional import (
     config_to_yaml,
     config_to_program
 )
+from . import defaults
