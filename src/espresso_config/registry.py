@@ -1,8 +1,8 @@
 import inspect
-from typing import Type, Callable, Generic, TypeVar, Union
+from typing import Callable, Generic, Type, TypeVar, Union
 
-from .node import ConfigNode, ConfigParam
 from .functional import config_from_dict
+from .node import ConfigNode, ConfigParam
 
 
 CR = TypeVar('CR', bound='ConfigRegistry')
@@ -69,7 +69,8 @@ class ConfigRegistry(Generic[CR]):
             raise ValueError(msg)
 
         # setting up the default _target_ here for autoinstantiation.
-        param_defaults[instantitate.TARGET] = f'{module.__name__}.{cls_.__name__}'
+        param_defaults[instantitate.TARGET] = \
+            f'{module.__name__}.{cls_.__name__}'
 
         config_cls = config_from_dict.cls(config=param_defaults,
                                           annotations=param_annotations,

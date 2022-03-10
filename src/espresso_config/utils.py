@@ -7,39 +7,42 @@ from typing import Any, Callable, Type
 import smart_open
 
 
-def mkdir_p(path: str) -> str:
+def mkdir_p(path):
     try:
         os.makedirs(path)
     except OSError as exc:  # Python >2.5
-        if exc.errno != errno.EEXIST or not os.path.isdir(path):
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
             raise
     return path
+
 
 class hybridmethod:
     """A decorator that allows overloading a method depending
     on whether it is a class method or instance method. From
     https://stackoverflow.com/a/28238047"""
 
-    def __init__(self, fclass, finstance=None, doc=None):
-        self.fclass = fclass
-        self.finstance = finstance
-        self.__doc__ = doc or fclass.__doc__
+    def __init__(self, f_class, finstance=None, doc=None):
+        self.f_class = f_class
+        self.f_instance = finstance
+        self.__doc__ = doc or f_class.__doc__
         # support use on abstract base classes
         self.__isabstractmethod__ = bool(
-            getattr(fclass, '__isabstractmethod__', False)
+            getattr(f_class, '__isabstractmethod__', False)
         )
 
-    def classmethod(self, fclass):
-        return type(self)(fclass, self.finstance, None)
+    def classmethod(self, f_class):
+        return type(self)(f_class, self.f_instance, None)
 
-    def instancemethod(self, finstance):
-        return type(self)(self.fclass, finstance, self.__doc__)
+    def instancemethod(self, f_instance):
+        return type(self)(self.f_class, f_instance, self.__doc__)
 
     def __get__(self, instance, cls):
-        if instance is None or self.finstance is None:
+        if instance is None or self.f_instance is None:
               # either bound to the class, or no instance method available
-            return self.fclass.__get__(cls, None)
-        return self.finstance.__get__(instance, cls)
+            return self.f_class.__get__(cls, None)
+        return self.f_instance.__get__(instance, cls)
 
 
 class MISSING:
@@ -57,7 +60,8 @@ def type_evaluator(field_type: Type[Any]) -> Callable:
         if not issubclass(field_type, str):
             # unless the type is string, we use literal
             # eval to cast to a built in python type;
-            # literal_eval supports things such as list, dict, etc. too!
+            # literal_eval supports things such as list, dict,
+            # etc. too!
             value = literal_eval(value)
 
         return field_type(value)
@@ -65,6 +69,8 @@ def type_evaluator(field_type: Type[Any]) -> Callable:
 
 
 def read_raw_file(file_path: str) -> str:
+    """For reading the content of a file from multiple
+    providers."""
     with smart_open.open(file_path, mode='r', encoding='utf-8') as f:
         content = f.read()
     return content

@@ -1,28 +1,15 @@
-from dataclasses import dataclass, field
+import copy
 import functools
 import logging
 import re
-import copy
-import inspect
-from typing import (
-    Any,
-    Iterable,
-    List,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
-    Dict,
-    Optional,
-    TypeVar,
-    Generic,
-    NamedTuple,
-    get_type_hints
-)
+from dataclasses import dataclass, field
+from inspect import getmembers, isclass, isroutine
+from typing import (Any, Dict, Generic, Iterable, List, NamedTuple, Optional,
+                    Sequence, Set, Tuple, Type, TypeVar, Union, get_type_hints)
+
 import yaml
 
-from .utils import hybridmethod, MISSING
+from .utils import MISSING, hybridmethod
 
 
 # get logger for this file, mostly used for debugging
@@ -66,7 +53,7 @@ class ConfigParam(Generic[CP]):
 class ConfigRegistryReference(Generic[CE]):
     """Extract registry references and resolve them"""
     def __init__(
-        self,
+        self: CE,
         param_name: str = None,
         registry_ref: str = None,
         registry_args: Sequence[Any] = None
@@ -75,7 +62,7 @@ class ConfigRegistryReference(Generic[CE]):
         self.registry_ref = registry_ref
         self.registry_args = registry_args or []
 
-    def name_as_placeholder_variable(self):
+    def name_as_placeholder_variable(self: CE):
         """Split the name (if provided) to be used
         as the path for placeholder variable"""
         if self.param_name is not None:
@@ -94,7 +81,10 @@ class ConfigRegistryReference(Generic[CE]):
                        registry_ref=registry_ref,
                        registry_args=args)
 
-    def resolve(self, param_value: Any, nodes_cls: Sequence[CN] = None, **kwargs) -> Any:
+    def resolve(self: CE,
+                param_value: Any,
+                nodes_cls: Sequence[CN] = None,
+                **kwargs) -> Any:
         """Resolves and instantiates a reference to a registry object using
         `param_value`. `nodes_cls` can be a list of ConfigNode objects to
         merge with no override to the registry reference (if the registry
@@ -111,15 +101,15 @@ class ConfigRegistryReference(Generic[CE]):
         registry_reference = ConfigRegistry.get(self.registry_ref)
 
         for node_cls in nodes_cls:
-            if inspect.isclass(node_cls) and not issubclass(node_cls, ConfigNode):
+            if isclass(node_cls) and not issubclass(node_cls, ConfigNode):
                 msg = ('The registry reference resolver has receive an object'
                        f'of type {node_cls}, which is not a ConfigNode')
                 raise ValueError(msg)
-            if (inspect.isclass(registry_reference) and
+            if (isclass(registry_reference) and
                 not issubclass(registry_reference, ConfigNode)):
-                msg = ('The registry reference resolver has received one or more'
-                       'ConfigNode, but they cannot be merged with a registry '
-                       f'reference of type {type(registry_reference)}')
+                msg = ('The registry reference resolver has received one or '
+                       'more ConfigNode, but they cannot be merged with a '
+                       f'registry reference of type {type(registry_reference)}')
                 raise ValueError(msg)
             registry_reference = registry_reference >> node_cls
 
@@ -186,7 +176,7 @@ class ConfigNodeProps(Generic[CR]):
 
         # We use getmembers instead of __dict__ because it
         # resolves inheritance (__dict__ does not!)
-        all_members = dict(inspect.getmembers(node_cls))
+        all_members = dict(getmembers(node_cls))
 
         defaults = {name: all_members[name]
                     for name in cls.get_annotations(node_cls)
@@ -212,9 +202,9 @@ class ConfigNodeProps(Generic[CR]):
 
         # We use getmembers instead of __dict__ because it
         # resolves inheritance (__dict__ does not!)
-        all_members = dict(inspect.getmembers(node_cls))
+        all_members = dict(getmembers(node_cls))
         subnodes = {name: cls_ for name, cls_ in all_members.items()
-                    if inspect.isclass(cls_) and issubclass(cls_, ConfigNode)}
+                    if isclass(cls_) and issubclass(cls_, ConfigNode)}
         return subnodes
 
     @get_subnodes.instancemethod
@@ -223,7 +213,7 @@ class ConfigNodeProps(Generic[CR]):
 
     @hybridmethod
     def get_all_cls_members(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, Any]:
-        all_non_routines = inspect.getmembers(node_cls, lambda a: not(inspect.isroutine(a)))
+        all_non_routines = getmembers(node_cls, lambda a: not(isroutine(a)))
         return {name: value for name, value in all_non_routines
                 if not((name.startswith('__') and name.endswith('__')) or
                         name == '_is_protocol')}
@@ -233,7 +223,8 @@ class ConfigNodeProps(Generic[CR]):
         return type(self).get_all_cls_members(self.node_cls)
 
     @hybridmethod
-    def get_all_parameters(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, ParameterSpec]:
+    def get_all_parameters(cls: Type[CR],
+                           node_cls: Type[CN]) -> Dict[str, ParameterSpec]:
         """Get all parameters for this node as well as for its subnodes."""
 
         all_parameters = []
@@ -265,7 +256,8 @@ class ConfigNodeProps(Generic[CR]):
 
     def assign_param(self, name: str, value: Any):
         # printing some debug info
-        LOGGER.debug(f'[ASSIGN VAR][{self.long_name}][{self.cls_name}] {name}={value}')
+        LOGGER.debug(f'[ASSIGN VAR][{self.long_name}]'
+                     f'[{self.cls_name}] {name}={value}')
 
         # do the actual assignment
         self.param_keys.add(name)
@@ -288,12 +280,12 @@ class ConfigNodeProps(Generic[CR]):
         else:
             KeyError(f'`{key}` is not a parameter in {self.long_name}')
 
-
     def is_root(self: CR) -> bool:
         return self.parent == self.node
 
     def get_root(self: CR) -> CN:
-        """Traverse the configuration this node is part of to find the root node"""
+        """Traverse the configuration this node is part of to
+        find the root node"""
         if self.is_root():
             return self.node
         else:
@@ -323,11 +315,14 @@ class ConfigNodeProps(Generic[CR]):
             raise RuntimeError(msg)
 
     def to_dict(self: CR) -> Dict[str, Any]:
-        return {k: (self.get_props(v).to_dict() if isinstance(v, ConfigNode)
-                    else (repr(v) if isinstance(v, ConfigPlaceholderVar) else v))
+        return {k: (self.get_props(v).to_dict()
+                    if isinstance(v, ConfigNode) else
+                    (repr(v) if isinstance(v, ConfigPlaceholderVar) else v))
                 for k, v in self.node}
 
-    def to_yaml(self: CR, *args: Sequence[Any], **kwargs: Dict[str, Any]) -> str:
+    def to_yaml(self: CR,
+                *args: Sequence[Any],
+                **kwargs: Dict[str, Any]) -> str:
         return yaml.safe_dump(self.to_dict(), *args, **kwargs)
 
     @hybridmethod
@@ -402,11 +397,14 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         ) -> None:
         # Parsing comes in 5 phases, each one is in a separate code block!
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # This is mostly preliminaries
 
-        # Create a property object for this node; the object will bind itself to it
-        node_props = ConfigNodeProps(node=self, name=__name__, parent=__parent__)
+        # Create a property object for this node; the object will bind
+        # itself to it
+        node_props = ConfigNodeProps(node=self,
+                                     name=__name__,
+                                     parent=__parent__)
 
         # get annnotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
@@ -428,9 +426,9 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             msg = (f'Config to `{node_props.cls_name}` should be dict, '
                    f'but received {type(config)} instead!')
             raise ValueError(msg)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Override with options that are provided in `config` dictionary
         for param_name, param_value in config.items():
             # a little lambda function to log how we are doing
@@ -441,7 +439,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             if ConfigRegistryReference.contains(param_name):
                 # we have a registry reference! we need to extract the
                 # reference and get the config from the registry.
-                registry_reference = ConfigRegistryReference.from_str(param_name)
+                registry_reference = ConfigRegistryReference.\
+                    from_str(param_name)
                 param_name = registry_reference.param_name
             else:
                 registry_reference = None
@@ -514,7 +513,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 # parameter is, so we first extract the type.
                 param_type = annotations[param_name].type
 
-                if (inspect.isclass(param_type) and
+                if (isclass(param_type) and
                     issubclass(param_type, ConfigNode)):
                     # CASE 3.1: sometimes the type of a paramemter is
                     #           ConfigNode or a subclass of it, making
@@ -553,9 +552,10 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                                                    __parent__=self,
                                                    __name__=param_name)
             elif __flex_node__:
-                # CASE 5: I don't recognize this key, but I'm in flex config mode
-                #         so I'll just add it to this node object (config_value
-                #         is already asssigned, that's why we just pass here).
+                # CASE 5: I don't recognize this key, but I'm in flex config
+                #         mode so I'll just add it to this node object
+                #         (config_value is already asssigned, that's why we
+                #         just pass here).
                 debug_call('5.unrecognized')
             else:
                 # CASE ∞: Something went wrong and you reached a technically
@@ -566,21 +566,24 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
 
             # add parameter to set of parameters in this node and assign it
             node_props.assign_param(name=param_name, value=param_value)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Try using default values for parameters with no override. To find
         # which parameters are still missing, we get a tuple of parameter names
         # initialized so far from the node properties object; then we use it
         # to remove parameter names from the set of all annotations.
-        missing_params = set(annotations).difference(set(node_props.get_params_names()))
+        missing_params = set(annotations).difference(
+            set(node_props.get_params_names())
+        )
 
         for param_name in missing_params:
             if param_name not in defaults:
                 # This parameter was not overwritten by the configuration
                 # provided to this __init__ method; however, the paramer
                 # doesn't have a default, so we need to raise an error.
-                msg = f'parameter "{param_name}" is missing for "{node_props.cls_name}"'
+                msg = (f'parameter "{param_name}" is '
+                       f'missing for "{node_props.cls_name}"')
                 raise ValueError(msg)
 
             # We got lucky! We found a default value for this annotated
@@ -608,32 +611,36 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             # add parameter to set of parameters in this node and
             # assign its DEFAULT VALUE
             node_props.assign_param(name=param_name, value=param_value)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Last set of assignments! Like we did with annotations, we need to
-        # check if there are one or more submodules that have not been initialized
-        # already through the config provided by the user.
-        missing_subnodes = set(subnodes).difference(set(node_props.get_params_names()))
+        # check if there are one or more submodules that have not been
+        # initialized already through the config provided by the user.
+        missing_subnodes = set(subnodes).difference(
+            set(node_props.get_params_names())
+        )
 
         for param_name in missing_subnodes:
             # initialize the subnode here
-            param_value = subnodes[param_name](__parent__=self, __name__=param_name)
+            param_value = subnodes[param_name](__parent__=self,
+                                               __name__=param_name)
 
             # add the subnode to the config
             node_props.assign_param(name=param_name, value=param_value)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Finally, if this is a root class, we want to take care of replacing
         # variables with actual values; not going to do any late binding a la
         # hydra, with some minimal logic to catch cyclical assignments
         if node_props.is_root():
             node_props.apply_vars()
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     def __iter__(self: CN) -> Iterable[Tuple[str, Any]]:
-        """Get a iterable of names and parameters in this node, including subnodes"""
+        """Get a iterable of names and parameters in this node,
+        including subnodes"""
         yield from ((k, self[k]) for k in
                     ConfigNodeProps.get_props(self).get_params_names())
 
@@ -650,7 +657,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         if key in node_props.get_params_names():
             return getattr(self, key)
         else:
-            raise KeyError(f'`{key}` is not a parameter in {node_props.long_name}')
+            msg = f'`{key}` is not a parameter in {node_props.long_name}'
+            raise KeyError(msg)
 
     def __len__(self: CN) -> int:
         return sum(1 for _ in self)
@@ -676,7 +684,9 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
 class VarMatch:
     path: Sequence[str]
     match: str
-    registry: ConfigRegistryReference = field(default_factory=ConfigRegistryReference)
+    registry: ConfigRegistryReference = field(
+        default_factory=ConfigRegistryReference
+    )
 
 
 class ConfigPlaceholderVar(Generic[CV]):

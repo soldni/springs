@@ -1,8 +1,6 @@
 import logging
-from multiprocessing import current_process
 import os
-from typing import Any, Callable, Dict, Type, TypeVar, Union
-
+from multiprocessing import current_process
 
 from .utils import mkdir_p
 
@@ -42,10 +40,13 @@ def configure_logging(
         path_name = f'{path_name}_{current_process().name}{path_ext}'
 
         kw = file_handler_kwargs or {}
-        root_file_handler = logging.FileHandler(filename=os.path.join(path_dir, path_name), **kw)
+        root_file_handler = logging.FileHandler(
+            filename=os.path.join(path_dir, path_name), **kw)
         root_file_handler.setFormatter(root_formatter)
         handlers.append(root_file_handler)
 
     # add the handlers to the root logger, force reattaching other loggers
     kw = basic_config_kwargs or {}
-    logging.basicConfig(level=logging_level, force=force_root_reattach, handlers=handlers, **kw)
+    logging.basicConfig(level=logging_level,
+                        force=force_root_reattach,
+                        handlers=handlers, **kw)

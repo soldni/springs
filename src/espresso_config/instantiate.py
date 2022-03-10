@@ -1,13 +1,16 @@
 import copy
-import importlib
 import functools
-from typing import Any, Dict, TypeVar, Union
+import importlib
+from typing import Any, Callable, Dict, Sequence, Type, TypeVar, Union
 
-from .node import ConfigNodeProps, ConfigNode, Generic
 from .functional import config_from_dict
+from .node import ConfigNode, ConfigNodeProps, Generic
 
 
 IT = TypeVar('IT', bound='InitLater')
+GC = TypeVar('GC', bound='get_callable')
+IN = TypeVar('IN', bound='instantiate')
+
 
 class InitLater(functools.partial, Generic[IT]):
     def get_kw(self, *args, **kwargs):
@@ -42,7 +45,7 @@ class InitLater(functools.partial, Generic[IT]):
 
 class get_callable:
     @staticmethod
-    def is_module(path):
+    def is_module(path: str) -> bool:
         try:
             spec = importlib.util.find_spec(path)
             return spec is not None
@@ -50,7 +53,7 @@ class get_callable:
             return False
 
     @classmethod
-    def _get_callable(cls, path):
+    def _get_callable(cls: Type[GC], path: str) -> Callable:
         if cls.is_module(path):
             return importlib.import_module(path)
         elif '.' in path:
@@ -63,7 +66,7 @@ class get_callable:
         else:
             return globals().get(path, __builtins__.get(path, None))
 
-    def __new__(cls, path):
+    def __new__(cls: Type[GC], path: str) -> Callable:
         cl_ = cls._get_callable(path)
 
         if cl_ is None:
@@ -71,20 +74,20 @@ class get_callable:
         return cl_
 
 
-class instantitate:
-    TARGET = '_target_'
+class instantiate:
+    TARGET: str = '_target_'
 
     @classmethod
     def later(
-        cls,
+        cls: Type[IN],
         config: Union[Dict[str, Any], ConfigNode, None] = None,
         _recursive_: bool = True,
-        **kwargs
+        **kwargs: Dict[str, Any]
     ) -> InitLater:
         """Return a InitLater object to be used to instantitate a
         new class or call a function"""
 
-        # if no config is provided, we return a functino
+        # if no config is provided, we return a function
         if config is None:
             return InitLater.no_op()
 
@@ -116,10 +119,10 @@ class instantitate:
 
     @classmethod
     def now(
-        cls,
+        cls: Type[IN],
         config: Union[ConfigNode, dict] = None,
         _recursive_: bool = True,
-        **kwargs
+        **kwargs: Dict[str, Any]
     ) -> object:
         """Create a later, but initialize it now!"""
 
@@ -128,6 +131,8 @@ class instantitate:
 
         return cls.later(config=config, _recursive_=_recursive_, **kwargs)()
 
-    def __new__(cls, *args, **kwargs) -> object:
+    def __new__(cls: Type[IN],
+                *args: Sequence[Any],
+                **kwargs: Dict[str, Any]) -> object:
         """Alias for `instantitate.now`"""
         return cls.now(*args, **kwargs)
