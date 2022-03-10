@@ -41,7 +41,7 @@ class ConfigRegistry(Generic[CR]):
     def auto(cls, cls_: type) -> ConfigNode:
 
         # import here to avoid circular imports
-        from .instantiate import instantitate
+        from .instantiate import instantiate
 
         # get specs for this class
         module = inspect.getmodule(cls_)
@@ -53,7 +53,7 @@ class ConfigRegistry(Generic[CR]):
 
         param_annotations = {k: ConfigParam(v) for k, v
                              in spec.annotations.items()}
-        param_annotations[instantitate.TARGET] = ConfigParam(str)
+        param_annotations[instantiate.TARGET] = ConfigParam(str)
 
         # we need to zip from the back because kwargs are always at
         # the end! So if only 2 out of 4 parameters have keyword args,
@@ -69,7 +69,7 @@ class ConfigRegistry(Generic[CR]):
             raise ValueError(msg)
 
         # setting up the default _target_ here for autoinstantiation.
-        param_defaults[instantitate.TARGET] = \
+        param_defaults[instantiate.TARGET] = \
             f'{module.__name__}.{cls_.__name__}'
 
         config_cls = config_from_dict.cls(config=param_defaults,

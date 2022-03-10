@@ -12,5 +12,5 @@ from .functional import (
     config_to_program
 )
 from . import defaults as _defaults
-from .instantiate import instantitate
+from .instantiate import instantiate
 from .logging import configure_logging
