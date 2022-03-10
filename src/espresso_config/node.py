@@ -331,27 +331,37 @@ class ConfigNodeProps(Generic[CR]):
         return yaml.safe_dump(self.to_dict(), *args, **kwargs)
 
     @hybridmethod
-    def update(cls: Type[CR], node: CN, other_node: CN, flex: bool = False) -> Dict[str, Any]:
+    def update(cls: Type[CR],
+               node: CN,
+               other_node: CN,
+               flex: bool = False) -> Dict[str, Any]:
         """Create a new node node where values form `node`
         are updated with values from `other_node`."""
 
-        # we are flexible if we are told to be or if any of the nodes classes is
-        flex = flex or isinstance(node, ConfigFlexNode) or isinstance(other_node, ConfigFlexNode)
+        # we are flexible if we are told to be or if any
+        # of the nodes classes is.
+        flex = (flex or
+                isinstance(node, ConfigFlexNode) or
+                isinstance(other_node, ConfigFlexNode))
 
         props = cls.get_props(node)
         other_props = cls.get_props(other_node)
 
-        node_cls = (props.node_cls << other_props.node_cls) if flex else props.node_cls
+        node_cls = ((props.node_cls << other_props.node_cls)
+                    if flex else props.node_cls)
 
         config_values = props.to_dict()
         config_values.update(other_props.to_dict())
 
         return node_cls(config_values, __flex_node__=flex)
 
-
     @update.instancemethod
-    def update(self: CR, other_node: CN, flex: bool = False) -> Dict[str, Any]:
-        return type(self).update(node=self.node, other_node=other_node, flex=flex)
+    def update(self: CR,
+               other_node: CN,
+               flex: bool = False) -> Dict[str, Any]:
+        return type(self).update(node=self.node,
+                                 other_node=other_node,
+                                 flex=flex)
 
 
 class MetaConfigNode(type):
@@ -447,26 +457,31 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 raise KeyError(msg)
 
             if registry_reference is not None:
-                # CASE 1: we just pulled a config object out of the registry! let's
-                #         use it to initialize the value for this parameter. we provide
-                #         the value of the config as an input.
+                # CASE 1: we just pulled a config object out of the
+                #         registry! let's use it to initialize the value
+                #         for this parameter. we provide the value of the
+                #         config as an input.
                 debug_call('1.registry')
 
-                # It might be the case that we need merge a registry reference with nodes.
-                # (see explanation below). We keep them in this list before passing them
+                # It might be the case that we need merge a registry
+                # reference with nodes (see explanation below). We keep
+                # them in this list before passing them
                 # registry_reference.resolve
                 nodes_cls_to_merge = []
                 if param_name in subnodes:
-                    # CASE 1.1: beside the key with just loaded, we also have a subnode
-                    #           with potentially some default parameters! fear not, we
+                    # CASE 1.1: beside the key with just loaded, we also
+                    #           have a subnode with potentially some
+                    #           default parameters! fear not, we
                     #           merge configs using operator `>>`
                     debug_call('1.1.registry+submodule')
                     nodes_cls_to_merge.append(subnodes[param_name])
 
-                if param_name in annotations and issubclass(annotations[param_name].type, ConfigNode):
-                    # CASE 1.2: we also need to merge with the type we also get from
-                    #           the parameter annotation. This is usually empty, but
-                    #           we merge with it for good measure too.
+                if (param_name in annotations and
+                    issubclass(annotations[param_name].type, ConfigNode)):
+                    # CASE 1.2: we also need to merge with the type we also
+                    #           get from the parameter annotation. This is
+                    #           usually empty, but we merge with it for
+                    #           good measure too.
                     debug_call('1.2.registry+annotation')
                     nodes_cls_to_merge.append(annotations[param_name].type)
 
@@ -479,8 +494,9 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     __name__=param_name
                 )
             elif ConfigPlaceholderVar.contains(param_value):
-                # CASE 2: you found a value with a variable in it; we save it with
-                #         the rest of the vars, and it will be resolved it later.
+                # CASE 2: you found a value with a variable in it; we save
+                #         it with the rest of the vars, and it will be
+                #         resolved it later.
                 debug_call('2.variable')
                 param_value = ConfigPlaceholderVar(
                     parent_node=self,
@@ -498,25 +514,44 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 # parameter is, so we first extract the type.
                 param_type = annotations[param_name].type
 
-                if inspect.isclass(param_type) and issubclass(param_type, ConfigNode):
-                    # CASE 3.1: sometimes the type of a paramemter is ConfigNode
-                    #           or a subclass of it, making necessary to pass some extra
-                    #           parameters to the constructor instead of just
-                    #           `param_value`. we accomplish that with a partial decorator.
+                if (inspect.isclass(param_type) and
+                    issubclass(param_type, ConfigNode)):
+                    # CASE 3.1: sometimes the type of a paramemter is
+                    #           ConfigNode or a subclass of it, making
+                    #           necessary to pass some extra parameters to
+                    #           the constructor instead of just `param_value`.
+                    #           We accomplish that with a partial decorator.
                     debug_call('3.1.ann_subnode')
                     param_type = functools.partial(
                         param_type, __parent__=self, __name__=param_name
                     )
+                elif isinstance(param_value, param_type):
+                    # We cast to param_type, but only if we absolutely
+                    # have to. This prevents unwanted initializations is
+                    # the param_type is a complex object. To maintain
+                    # the code a bit more legible, we make param_type a
+                    # no-op function if casting is not needed.
+                    #
+                    # (I discovered this while trying to understand why a
+                    # trainer, which was expecting a logger, was being passed
+                    # a logger that has itself as save_dir; it turns out it was
+                    # because an object instance was passed as first parameter
+                    # to the constructor itself due to this casting. checking
+                    # if the object is already of the expected type should
+                    # fix this).
+                    param_type = lambda x: x
 
+                # cast (or not!) here
                 param_value = param_type(param_value)
+
             elif param_name in subnodes:
                 # CASE 4: This parameter corresponds to a subnode! we create
                 #         the subnode and set that as parameter value
                 debug_call('4.subnode')
 
-                param_value = subnodes[param_name](
-                    config=param_value, __parent__=self, __name__=param_name
-                )
+                param_value = subnodes[param_name](config=param_value,
+                                                   __parent__=self,
+                                                   __name__=param_name)
             elif __flex_node__:
                 # CASE 5: I don't recognize this key, but I'm in flex config mode
                 #         so I'll just add it to this node object (config_value
@@ -708,16 +743,12 @@ class ConfigPlaceholderVar(Generic[CV]):
             var_match: VarMatch = self.placeholder_vars.pop(0)
 
             if var_match.path:
-                try:
-                    # this reduce function traverses the config from the
-                    # root node to get to the variable that we want
-                    # to use for substitution
-                    placeholder_substitution = functools.reduce(
-                        lambda node, key: node[key], var_match.path, root_node
-                    )
-                except Exception:
-                    import ipdb
-                    ipdb.set_trace()
+                # this reduce function traverses the config from the
+                # root node to get to the variable that we want
+                # to use for substitution
+                placeholder_substitution = functools.reduce(
+                    lambda node, key: node[key], var_match.path, root_node
+                )
             else:
                 # this is a registry reference with no placeholder
                 # variable; we set the placeholder substitution to None

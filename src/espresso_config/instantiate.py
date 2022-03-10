@@ -1,22 +1,40 @@
 import copy
 import importlib
 import functools
-from typing import Any, Callable, Dict, Type, TypeVar, Union
+from typing import Any, Dict, TypeVar, Union
 
-from .node import ConfigNodeProps, ConfigNode
+from .node import ConfigNodeProps, ConfigNode, Generic
 from .functional import config_from_dict
 
 
-class InitLater(functools.partial):
+IT = TypeVar('IT', bound='InitLater')
+
+class InitLater(functools.partial, Generic[IT]):
     def get_kw(self, *args, **kwargs):
+        """Shortcut for accessing parameters that have been
+        provided to an InitLater object"""
         return self.keywords.get(*args, **kwargs)
 
+    @staticmethod
+    def _no_op():
+        ...
+
+    @classmethod
+    def no_op(cls) -> IT:
+        """Create an init later that does nothing.
+        Useful for when trying to instantiate from None."""
+        return cls(cls._no_op)
+
     def __bool__(self) -> bool:
-        return len(self.keywords) > 0
+        # this allows us to check if the InitLater object
+        # is "True" (that is, it is a real wrapped function),
+        # or if it is "False" (it's a no-op)
+        return self.func != self._no_op
 
     def __call__(self, /, *args, **keywords):
         # recursively call deferred initialization if
         # we encounter another InitLater
+        args = [v() if isinstance(v, InitLater) else v for v in args]
         keywords = {k: v() if isinstance(v, InitLater) else v
                     for k, v in {**self.keywords, **keywords}.items()}
         return self.func(*self.args, *args, **keywords)
@@ -56,10 +74,6 @@ class get_callable:
 class instantitate:
     TARGET = '_target_'
 
-    @staticmethod
-    def _no_op():
-        ...
-
     @classmethod
     def later(
         cls,
@@ -67,23 +81,27 @@ class instantitate:
         _recursive_: bool = True,
         **kwargs
     ) -> InitLater:
-        """For now we use hydra instead of doing the lookup ourselves;
-        we will fix it later"""
-        if config is None:
-            return InitLater(cls._no_op)
+        """Return a InitLater object to be used to instantitate a
+        new class or call a function"""
 
-        config = (config_from_dict(config, flex=True)
-                  if isinstance(config, dict) else
-                  copy.deepcopy(config))
+        # if no config is provided, we return a functino
+        if config is None:
+            return InitLater.no_op()
+
+        config_node = (config_from_dict(config, flex=True)
+                       if isinstance(config, dict) else
+                       copy.deepcopy(config))
 
         if len(kwargs) > 0:
-            config = config << config_from_dict(kwargs, flex=True)
+            config_node = config_node << config_from_dict(kwargs, flex=True)
 
-        if cls.TARGET not in config:
-            msg = f'Cannot instantiate from `{config}`: `{cls.TARGET}` keyword missing'
+        if cls.TARGET not in config_node:
+            msg = (f'Cannot instantiate from `{config_node}`: '
+                   f'`{cls.TARGET}` keyword missing')
             raise ValueError(msg)
 
-        fn = get_callable(ConfigNodeProps.get_props(config).pop(cls.TARGET))
+        _target_ = ConfigNodeProps.get_props(config_node).pop(cls.TARGET)
+        fn = get_callable(_target_)
 
         def _recursive_init(param):
             if (_recursive_ and
@@ -92,7 +110,7 @@ class instantitate:
                 param = cls.later(config=param, _recursive_=True)
             return param
 
-        init_call_dict = {k: _recursive_init(v) for k, v in config}
+        init_call_dict = {k: _recursive_init(v) for k, v in config_node}
 
         return InitLater(fn, **init_call_dict)
 
