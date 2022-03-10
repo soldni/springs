@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from email.policy import default
+from dataclasses import dataclass, field
 import functools
 import logging
 import re
@@ -35,12 +34,16 @@ CN = TypeVar('CN', bound='ConfigNode')
 CV = TypeVar('CV', bound='ConfigPlaceholderVar')
 CP = TypeVar('CP', bound='ConfigParam')
 CR = TypeVar('CR', bound='ConfigNodeProps')
+CE = TypeVar('CE', bound='ConfigRegistryReference')
 
 
 # Constants
 CONFIG_NODE_PROPERTIES_NAME = '__node__'
 CONFIG_NODE_REGISTRY_SEPARATOR = '@'
-CONFIG_PLACEHOLDER_VAR_TEMPLATE = r'\$\{(([a-zA-Z_]\w*)\.?)*(@[a-zA-Z_]+){0,1}\}'
+CONFIG_PLACEHOLDER_VAR_TEMPLATE = (
+    r'\$\{(([a-zA-Z_]\w*)\.?)*(%s[a-zA-Z_]+)*\}' %
+    CONFIG_NODE_REGISTRY_SEPARATOR
+)
 
 
 class ParameterSpec(NamedTuple):
@@ -49,14 +52,83 @@ class ParameterSpec(NamedTuple):
     type: Type[Any]
 
 
+T = TypeVar("T")
 class ConfigParam(Generic[CP]):
     """Type wrapper to indicate parameters in a config node."""
-    type: Type
+    type: T
 
-    def __new__(cls: Type[CP], target_type: Type) -> Type[CP]:
+    def __new__(cls: Type[CP], target_type: T) -> T:
         class ConfigTypedParam(cls):
             type = target_type
         return ConfigTypedParam
+
+
+class ConfigRegistryReference(Generic[CE]):
+    """Extract registry references and resolve them"""
+    def __init__(
+        self,
+        param_name: str = None,
+        registry_ref: str = None,
+        registry_args: Sequence[Any] = None
+    ):
+        self.param_name = param_name
+        self.registry_ref = registry_ref
+        self.registry_args = registry_args or []
+
+    def name_as_placeholder_variable(self):
+        """Split the name (if provided) to be used
+        as the path for placeholder variable"""
+        if self.param_name is not None:
+            return self.param_name.split('.')
+        return None
+
+    @classmethod
+    def from_str(cls: Type[CE], string: str) -> CE:
+        args = string.split(CONFIG_NODE_REGISTRY_SEPARATOR)
+        if len(args) == 1:
+            # no reference
+            return cls(param_name=args[0])
+        else:
+            param_name, registry_ref, *args = args
+            return cls(param_name=param_name,
+                       registry_ref=registry_ref,
+                       registry_args=args)
+
+    def resolve(self, param_value: Any, nodes_cls: Sequence[CN] = None, **kwargs) -> Any:
+        """Resolves and instantiates a reference to a registry object using
+        `param_value`. `nodes_cls` can be a list of ConfigNode objects to
+        merge with no override to the registry reference (if the registry
+        reference is itself a ConfigNode). `kwargs`, as well as `self.args`
+        are passed to the registry reference constructor."""
+
+        if self.registry_ref is None:
+            # no-op if there is no registry ref!
+            return param_value
+
+        nodes_cls = nodes_cls or []
+
+        from .registry import ConfigRegistry
+        registry_reference = ConfigRegistry.get(self.registry_ref)
+
+        for node_cls in nodes_cls:
+            if inspect.isclass(node_cls) and not issubclass(node_cls, ConfigNode):
+                msg = ('The registry reference resolver has receive an object'
+                       f'of type {node_cls}, which is not a ConfigNode')
+                raise ValueError(msg)
+            if (inspect.isclass(registry_reference) and
+                not issubclass(registry_reference, ConfigNode)):
+                msg = ('The registry reference resolver has received one or more'
+                       'ConfigNode, but they cannot be merged with a registry '
+                       f'reference of type {type(registry_reference)}')
+                raise ValueError(msg)
+            registry_reference = registry_reference >> node_cls
+
+        return registry_reference(param_value, *self.registry_args, **kwargs)
+
+    @classmethod
+    def contains(cls, string: str) -> bool:
+        return CONFIG_NODE_REGISTRY_SEPARATOR in string
+
 
 
 class ConfigNodeProps(Generic[CR]):
@@ -151,7 +223,10 @@ class ConfigNodeProps(Generic[CR]):
 
     @hybridmethod
     def get_all_cls_members(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, Any]:
-        return dict(inspect.getmembers(node_cls))
+        all_non_routines = inspect.getmembers(node_cls, lambda a: not(inspect.isroutine(a)))
+        return {name: value for name, value in all_non_routines
+                if not((name.startswith('__') and name.endswith('__')) or
+                        name == '_is_protocol')}
 
     @get_all_cls_members.instancemethod
     def get_all_cls_members(self: CR) -> Dict[str, Any]:
@@ -202,6 +277,18 @@ class ConfigNodeProps(Generic[CR]):
     def add_var(self: CR, var: CV):
         self.config_vars.append(var)
 
+    def pop(self: CR, key: str, default=MISSING) -> Any:
+        if key in self.param_keys:
+            self.param_keys.remove(key)
+            value = getattr(self.node, key)
+            delattr(self.node, key)
+            return value
+        elif default != MISSING:
+            return default
+        else:
+            KeyError(f'`{key}` is not a parameter in {self.long_name}')
+
+
     def is_root(self: CR) -> bool:
         return self.parent == self.node
 
@@ -243,6 +330,29 @@ class ConfigNodeProps(Generic[CR]):
     def to_yaml(self: CR, *args: Sequence[Any], **kwargs: Dict[str, Any]) -> str:
         return yaml.safe_dump(self.to_dict(), *args, **kwargs)
 
+    @hybridmethod
+    def update(cls: Type[CR], node: CN, other_node: CN, flex: bool = False) -> Dict[str, Any]:
+        """Create a new node node where values form `node`
+        are updated with values from `other_node`."""
+
+        # we are flexible if we are told to be or if any of the nodes classes is
+        flex = flex or isinstance(node, ConfigFlexNode) or isinstance(other_node, ConfigFlexNode)
+
+        props = cls.get_props(node)
+        other_props = cls.get_props(other_node)
+
+        node_cls = (props.node_cls << other_props.node_cls) if flex else props.node_cls
+
+        config_values = props.to_dict()
+        config_values.update(other_props.to_dict())
+
+        return node_cls(config_values, __flex_node__=flex)
+
+
+    @update.instancemethod
+    def update(self: CR, other_node: CN, flex: bool = False) -> Dict[str, Any]:
+        return type(self).update(node=self.node, other_node=other_node, flex=flex)
+
 
 class MetaConfigNode(type):
     """A very simple metaclass for the config node that
@@ -254,12 +364,20 @@ class MetaConfigNode(type):
     `A << B` merges B in to A; it is equivalent to `B >> A`
     """
     def __rshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
-        class MergedClsClass(cls, other_cls):
-            ...
-        return MergedClsClass
+        merged = type(f'{cls.__name__}_{other_cls.__name__}',
+                     (cls, other_cls),
+                     {})
+        return merged
+
 
     def __lshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
         return other_cls >> cls
+
+    def __repr__(cls: Type[CN]):
+        attributes = ConfigNodeProps.get_all_cls_members(cls)
+        attributes_repr = ', '.join(f'{name}={repr(value)}'
+                                    for name, value in attributes.items())
+        return f'{cls.__name__}({attributes_repr})'
 
 
 class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
@@ -267,7 +385,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
 
     def __init__(
         self: CN,
-        config: Optional[Dict[str, Any]] = None,
+        config: Optional[Union[Dict[str, Any], CN]] = None,
         __parent__ : CN = None,
         __flex_node__: bool = False,
         __name__: str = None
@@ -291,6 +409,11 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # values; we also check if it is of the right type (otherwise if it is
         # not the user will get inscrutable errors down the line).
         config = config or {}
+        if isinstance(config, ConfigNode):
+            # if it is a config node, we get its dict representation
+            # first, and then initialize
+            config = ConfigNodeProps.get_props(config).to_dict()
+
         if not isinstance(config, dict):
             msg = (f'Config to `{node_props.cls_name}` should be dict, '
                    f'but received {type(config)} instead!')
@@ -305,56 +428,57 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 f'[PARSE CONFIG][{node_props.long_name}][{case}] {param_name}'
             )
 
-            if CONFIG_NODE_REGISTRY_SEPARATOR in param_name:
+            if ConfigRegistryReference.contains(param_name):
                 # we have a registry reference! we need to extract the
                 # reference and get the config from the registry.
-
-                # first, we import from the registry; we do it here to avoid
-                # circular references.
-                from espresso_config.registry import ConfigRegistry
-
-                # we split parameter name out, and the the right constructor
-                # for this reference out of the registry.
-                param_name, registry_reference_name = param_name.split('@', 1)
-                registry_config_cls = ConfigRegistry.get(registry_reference_name)
+                registry_reference = ConfigRegistryReference.from_str(param_name)
+                param_name = registry_reference.param_name
             else:
-                registry_config_cls = None
+                registry_reference = None
 
             # check if it is a valid parameter, if not, raise a KeyError
             if ((param_name not in annotations) and
                 (param_name not in subnodes) and
-                not(__flex_node__)):
+                not(__flex_node__) and
+                registry_reference is None):
                 debug_call('0.not_supported')
                 # CASE 0: we can't add this key to this config; raise an error.
                 msg = f'Parameter "{param_name}" not supported in "{node_props.cls_name}"'
                 raise KeyError(msg)
 
-            if registry_config_cls is not None:
+            if registry_reference is not None:
                 # CASE 1: we just pulled a config object out of the registry! let's
                 #         use it to initialize the value for this parameter. we provide
                 #         the value of the config as an input.
                 debug_call('1.registry')
 
+                # It might be the case that we need merge a registry reference with nodes.
+                # (see explanation below). We keep them in this list before passing them
+                # registry_reference.resolve
+                nodes_cls_to_merge = []
                 if param_name in subnodes:
                     # CASE 1.1: beside the key with just loaded, we also have a subnode
                     #           with potentially some default parameters! fear not, we
                     #           merge configs using operator `>>`
                     debug_call('1.1.registry+submodule')
-                    registry_config_cls = registry_config_cls >> subnodes[param_name]
+                    nodes_cls_to_merge.append(subnodes[param_name])
 
                 if param_name in annotations and issubclass(annotations[param_name].type, ConfigNode):
                     # CASE 1.2: we also need to merge with the type we also get from
                     #           the parameter annotation. This is usually empty, but
                     #           we merge with it for good measure too.
                     debug_call('1.2.registry+annotation')
-                    registry_config_cls = registry_config_cls >> annotations[param_name].type
+                    nodes_cls_to_merge.append(annotations[param_name].type)
 
                 # Finally after a bunch of merging (maybe?), we can instantiate
                 # an object using the registry reference!
-                param_value = registry_config_cls(
-                    param_value, __parent__=self, __name__=param_name
+                param_value = registry_reference.resolve(
+                    param_value,
+                    nodes_cls=nodes_cls_to_merge,
+                    __parent__=self,
+                    __name__=param_name
                 )
-            elif ConfigPlaceholderVar.has_placeholder_var(param_value):
+            elif ConfigPlaceholderVar.contains(param_value):
                 # CASE 2: you found a value with a variable in it; we save it with
                 #         the rest of the vars, and it will be resolved it later.
                 debug_call('2.variable')
@@ -437,7 +561,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             # value so it can be resolved later. We also add it to the
             # registry of all the placeholder variables, which is
             # in the node properties.
-            if ConfigPlaceholderVar.has_placeholder_var(param_value):
+            if ConfigPlaceholderVar.contains(param_value):
                 param_value = ConfigPlaceholderVar(
                     parent_node=self,
                     param_name=param_name,
@@ -478,24 +602,46 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         yield from ((k, self[k]) for k in
                     ConfigNodeProps.get_props(self).get_params_names())
 
+    def __repr__(self: CN):
+        full_name = ConfigNodeProps.get_props(self).long_name
+        return (f'<{full_name} config at {hex(id(self))} '
+                f'with params {ConfigNodeProps.get_props(self).to_dict()}>')
+
+    def __contains__(self: CN,  key: str) -> bool:
+        return key in ConfigNodeProps.get_props(self).get_params_names()
+
     def __getitem__(self, key: str) -> Any:
         node_props = ConfigNodeProps.get_props(self)
-        node_props.cls_name
         if key in node_props.get_params_names():
             return getattr(self, key)
         else:
-            raise KeyError(f'`{key}` is not a parameter in {node_props.cls_name}')
+            raise KeyError(f'`{key}` is not a parameter in {node_props.long_name}')
 
     def __len__(self: CN) -> int:
         return sum(1 for _ in self)
 
+    def __rshift__(self: CN, other: CN) -> CN:
+        return ConfigNodeProps.get_props(other).update(self)
+
+    def __lshift__(self: CN, other: CN) -> CN:
+        return other >> self
+
+    # def __deepcopy__(self: CN, *args, **kwargs) -> CN:
+    #     try:
+    #         config = ConfigNodeProps.get_props(self).to_dict()
+    #         return type(self)(config=config,
+    #                         __flex_node__=isinstance(self, ConfigFlexNode),
+    #                         __name__=ConfigNodeProps.get_props(self).short_name)
+    #     except Exception:
+    #         import ipdb
+    #         ipdb.set_trace()
 
 
 @dataclass
 class VarMatch:
     path: Sequence[str]
     match: str
-    registry: Optional[str] = None
+    registry: ConfigRegistryReference = field(default_factory=ConfigRegistryReference)
 
 
 class ConfigPlaceholderVar(Generic[CV]):
@@ -536,23 +682,13 @@ class ConfigPlaceholderVar(Generic[CV]):
                 msg = (f'Variable placeholder `{match.group()}` in '
                        f'"{param_value}" cannot be parsed.')
                 raise ValueError(msg)
-            elif CONFIG_NODE_REGISTRY_SEPARATOR in var_path_and_registry:
-                # CASE 1: we have a registry reference! two possible cases:
-                #           2.1. no variable placeholder, e.g.:
-                #                   foo: ${@__timestamp__}
-                #           2.2. we have a placeholder, e.g.
-                #                   path: ${var.to.relpath@__fullpath__}
-                var_path, registry_name = var_path_and_registry.split('@')
-                registry = ConfigRegistry.get(registry_name)
-            else:
-                # CASE 2: no registry reference; we simply set it to none
-                var_path, registry = var_path_and_registry, None
 
-            # handle case 2.1 here (no placeholder)
-            var_path = var_path.split('.') if len(var_path) else None
-            self.placeholder_vars.append(VarMatch(path=var_path,
-                                                  registry=registry,
-                                                  match=match.group()))
+            registry = ConfigRegistryReference.from_str(var_path_and_registry)
+            self.placeholder_vars.append(
+                VarMatch(path=registry.name_as_placeholder_variable(),
+                         registry=registry,
+                         match=match.group())
+            )
 
     def __repr__(self: CV) -> str:
         return self.__str__()
@@ -572,12 +708,16 @@ class ConfigPlaceholderVar(Generic[CV]):
             var_match: VarMatch = self.placeholder_vars.pop(0)
 
             if var_match.path:
-                # this reduce function traverses the config from the
-                # root node to get to the variable that we want
-                # to use for substitution
-                placeholder_substitution = functools.reduce(
-                    lambda node, key: node[key], var_match.path, root_node
-                )
+                try:
+                    # this reduce function traverses the config from the
+                    # root node to get to the variable that we want
+                    # to use for substitution
+                    placeholder_substitution = functools.reduce(
+                        lambda node, key: node[key], var_match.path, root_node
+                    )
+                except Exception:
+                    import ipdb
+                    ipdb.set_trace()
             else:
                 # this is a registry reference with no placeholder
                 # variable; we set the placeholder substitution to None
@@ -592,12 +732,13 @@ class ConfigPlaceholderVar(Generic[CV]):
             # we make a copy of the object to avoid unwanted side effects
             placeholder_substitution = copy.deepcopy(placeholder_substitution)
 
-            if var_match.registry is not None:
+            if var_match.registry.registry_ref:
                 # the user has asked for registry reference call, so
                 # we oblige. note that we do not pass in any args if
                 # there was no placeholder variable
-                args = (placeholder_substitution, ) if var_match.path else tuple()
-                placeholder_substitution = var_match.registry(*args)
+                args = ((placeholder_substitution, ) if
+                        var_match.registry.param_name else tuple())
+                placeholder_substitution = var_match.registry.resolve(*args)
 
             if var_match.match == self.unresolved_param_value:
                 # the placeholder variable is the entire string, e.g.:
@@ -629,7 +770,7 @@ class ConfigPlaceholderVar(Generic[CV]):
         setattr(self.parent_node, self.param_name, replaced_value)
 
     @classmethod
-    def has_placeholder_var(cls: Type[CV], value: Any) -> bool:
+    def contains(cls: Type[CV], value: Any) -> bool:
         """Returns True if value has variable (${...})
            somewhere, False otherwise"""
         return (isinstance(value, str) and

@@ -11,5 +11,6 @@ from .functional import (
     config_to_yaml,
     config_to_program
 )
-from . import defaults
+from . import defaults as _defaults
 from .instantiate import instantitate
+from .logging import configure_logging

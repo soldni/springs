@@ -1,8 +1,19 @@
 
+import errno
+import os
 from ast import literal_eval
-import smart_open
 from typing import Any, Callable, Type
 
+import smart_open
+
+
+def mkdir_p(path: str) -> str:
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno != errno.EEXIST or not os.path.isdir(path):
+            raise
+    return path
 
 class hybridmethod:
     """A decorator that allows overloading a method depending

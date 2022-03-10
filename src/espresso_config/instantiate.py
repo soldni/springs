@@ -4,6 +4,7 @@ import functools
 from typing import Any, Callable, Dict, Type, TypeVar, Union
 
 from .node import ConfigNodeProps, ConfigNode
+from .functional import config_from_dict
 
 
 class InitLater(functools.partial):
@@ -46,6 +47,7 @@ class get_callable:
 
     def __new__(cls, path):
         cl_ = cls._get_callable(path)
+
         if cl_ is None:
             raise ModuleNotFoundError(f'Could not find `{path}`')
         return cl_
@@ -61,7 +63,7 @@ class instantitate:
     @classmethod
     def later(
         cls,
-        config: Dict[str, Any] = None,
+        config: Union[Dict[str, Any], ConfigNode, None] = None,
         _recursive_: bool = True,
         **kwargs
     ) -> InitLater:
@@ -70,30 +72,29 @@ class instantitate:
         if config is None:
             return InitLater(cls._no_op)
 
-        if isinstance(config, ConfigNode):
-            params = ConfigNodeProps.get_props(config).to_dict()
-        elif isinstance(config, dict):
-            params = copy.deepcopy(config)
-        else:
-            msg = (f'`config` is of type `{type(config)}`, '
-                   'but it should be `ConfigNode` or dict.')
-            raise TypeError(msg)
+        config = (config_from_dict(config, flex=True)
+                  if isinstance(config, dict) else
+                  copy.deepcopy(config))
 
-        # merge overrides and parameters from config here.
-        params.update(kwargs)
+        if len(kwargs) > 0:
+            config = config << config_from_dict(kwargs, flex=True)
 
-        if cls.TARGET not in params:
-            msg = f'Cannot instantiate from `{params}`: `{cls.TARGET}` keyword missing'
+        if cls.TARGET not in config:
+            msg = f'Cannot instantiate from `{config}`: `{cls.TARGET}` keyword missing'
             raise ValueError(msg)
 
-        fn = get_callable(params.pop(cls.TARGET))
-        if _recursive_:
-            params = {k: (cls.later(config=v, _recursive_=True)
-                          if (isinstance(v, dict) and cls.TARGET in v)
-                          else v)
-                     for k, v in params.items()}
+        fn = get_callable(ConfigNodeProps.get_props(config).pop(cls.TARGET))
 
-        return InitLater(fn, **params)
+        def _recursive_init(param):
+            if (_recursive_ and
+                isinstance(param, (ConfigNode, dict))
+                and cls.TARGET in param):
+                param = cls.later(config=param, _recursive_=True)
+            return param
+
+        init_call_dict = {k: _recursive_init(v) for k, v in config}
+
+        return InitLater(fn, **init_call_dict)
 
     @classmethod
     def now(
