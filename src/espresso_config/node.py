@@ -153,11 +153,14 @@ class ConfigNodeProps(Generic[CR]):
     def set_name(self: CR, node_name: Union[str, None]):
             # set the full path to this node as its name
         self.short_name = self.cls_name if node_name is None else node_name
-        self.long_name = (self.short_name if self.is_root() else
-                          f'{self.get_props(self.parent).long_name}.{self.short_name}')
+        self.long_name = (
+            self.short_name if self.is_root() else
+            f'{self.get_props(self.parent).long_name}.{self.short_name}'
+        )
 
     @hybridmethod
-    def get_annotations(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, ConfigParam]:
+    def get_annotations(cls: Type[CR],
+                        node_cls: Type[CN]) -> Dict[str, ConfigParam]:
         # these are all annotations for parameters for this node; we use
         # them to cast param values to the right type as we parse a config
         annotations = {name: annotation for name, annotation in
@@ -212,7 +215,8 @@ class ConfigNodeProps(Generic[CR]):
         return type(self).get_subnodes(self.node_cls)
 
     @hybridmethod
-    def get_all_cls_members(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, Any]:
+    def get_all_cls_members(cls: Type[CR],
+                            node_cls: Type[CN]) -> Dict[str, Any]:
         all_non_routines = getmembers(node_cls, lambda a: not(isroutine(a)))
         return {name: value for name, value in all_non_routines
                 if not((name.startswith('__') and name.endswith('__')) or
@@ -233,7 +237,6 @@ class ConfigNodeProps(Generic[CR]):
         defaults = cls.get_defaults(node_cls)
 
         for param_name, param_annotation in annotations.items():
-
             all_parameters.append(
                 ParameterSpec(name=param_name,
                               type=param_annotation.type,
@@ -247,14 +250,13 @@ class ConfigNodeProps(Generic[CR]):
                                   type=param_spec.type,
                                   default=param_spec.default)
                 )
-
         return all_parameters
 
     @get_all_parameters.instancemethod
     def get_all_parameters(self: CR) -> Dict[str, ParameterSpec]:
         return type(self).get_all_parameters(self.node_cls)
 
-    def assign_param(self, name: str, value: Any):
+    def assign_param(self, name: str, value: Any, annotation: Any = None):
         # printing some debug info
         LOGGER.debug(f'[ASSIGN VAR][{self.long_name}]'
                      f'[{self.cls_name}] {name}={value}')
@@ -262,6 +264,13 @@ class ConfigNodeProps(Generic[CR]):
         # do the actual assignment
         self.param_keys.add(name)
         setattr(self.node, name, value)
+
+        # optionally set up annotation if provided
+        # (for more advanced uses)
+        if annotation is not None:
+            if not hasattr(self.node, '__annotations__'):
+                setattr(self.node, '__annotations__', {})
+            setattr(self.node.__annotations__, name, annotation)
 
     def get_params_names(self: CR) -> Sequence[str]:
         return tuple(self.param_keys)
@@ -452,7 +461,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 registry_reference is None):
                 debug_call('0.not_supported')
                 # CASE 0: we can't add this key to this config; raise an error.
-                msg = f'Parameter "{param_name}" not supported in "{node_props.cls_name}"'
+                msg = (f'Parameter "{param_name}" not '
+                       f'supported in "{node_props.cls_name}"')
                 raise KeyError(msg)
 
             if registry_reference is not None:
@@ -770,6 +780,22 @@ class ConfigPlaceholderVar(Generic[CV]):
             if isinstance(placeholder_substitution, ConfigNode):
                 ConfigNodeProps.get_props(placeholder_substitution).apply_vars()
 
+            # trick of the century: sometimes, by doing variable resolution,
+            # we end up with another variable! in that case, we simply
+            # tell the parent node with the class to do variable resolution too.
+            if isinstance(placeholder_substitution, ConfigPlaceholderVar):
+                # asking the parent to apply all its vars!
+                ConfigNodeProps.get_props(
+                    placeholder_substitution.parent_node).apply_vars()
+
+                # note that even if we apply the substitution,
+                # the value inside `placeholder_substitution` placeholder
+                # var does not change, so we need to manually fish it out
+                placeholder_substitution = getattr(
+                    placeholder_substitution.parent_node,
+                    placeholder_substitution.param_name
+                )
+
             # we make a copy of the object to avoid unwanted side effects
             placeholder_substitution = copy.deepcopy(placeholder_substitution)
 
@@ -808,6 +834,8 @@ class ConfigPlaceholderVar(Generic[CV]):
             # type to cast if necessary.
             replaced_value = self.param_config_type(replaced_value)
 
+        # finally done with variable resolution, let's set the
+        # parent to this value.
         setattr(self.parent_node, self.param_name, replaced_value)
 
     @classmethod
@@ -821,10 +849,56 @@ class ConfigPlaceholderVar(Generic[CV]):
 class ConfigFlexNode(ConfigNode):
     """Just like a ConfigNode, except it allows for additional
     parameters other than the ones provided with annotations"""
-    def __init__(
-        self: CN,
-        *args: List[Any],
-         __flex_node__: bool = True,
-        **kwargs: Dict[str, Any]
-    ) -> None:
+    def __init__(self: CN,
+                 *args: List[Any],
+                 __flex_node__: bool = True,
+                 **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, __flex_node__=True, **kwargs)
+
+
+class DictOfConfigNodes:
+    """A special type of node that contains a dictionary of ConfigNodes.
+    Useful for when you want to provide a bunch of nodes, but you are
+    not sure what the name of keys are. Usage:
+
+    ```python
+    from espresso_config import (
+        NodeConfig, DictOfConfigNodes, ConfigParam
+    )
+
+    class ConfigA(NodeConfig):
+        p: ConfigParam(int)
+
+    class RootConfig(NodeConfig):
+        dict_of_configs: ConfigParam(DictOfConfigNodes(ConfigA)) = {}
+
+    ```
+
+    and in the corresponding yaml file:
+
+    ```yaml
+    dict_of_configs:
+        first_config:
+            p: 1
+        second_config:
+            p: 2
+        ...
+    ```
+    """
+
+    class _Wrapper:
+
+        def __new__(cls, config=None, *args, **kwargs):
+            parsed = {}
+
+            for k, v in (config or {}).items():
+                node = super().__new__(cls)
+                node.__init__(v, *args, **kwargs)
+                parsed[k] = node
+
+            flex_node_wrapper_cls = type(cls.__name__, (ConfigFlexNode, ), {})
+            return flex_node_wrapper_cls(parsed, *args, **kwargs)
+
+    def __new__(cls, node_cls: ConfigFlexNode) -> ConfigFlexNode:
+        return type(f'DictOf{node_cls.__name__}',
+                    (cls._Wrapper, node_cls), {})
