@@ -170,7 +170,8 @@ class config_to_program:
 
     def __new__(cls, config_node: Type[ConfigNode]) -> Callable:
         if not(isclass(config_node) or issubclass(config_node, ConfigNode)):
-            raise ValueError(f'`config_node` is not a subclass of {ConfigNode.__name__}')
+            msg = f'`config_node` is not a subclass of {ConfigNode.__name__}'
+            raise ValueError(msg)
 
         local_config_node = config_node
 
@@ -197,6 +198,10 @@ class config_to_program:
                                 choices=['input', 'i',
                                          'parsed', 'p',
                                          'continue', 'c'])
+                ap.add_argument('-d',
+                                dest='debug',
+                                action='store_true',
+                                help='Enable debug mode',)
 
                 all_params = ConfigNodeProps.\
                     get_all_parameters(local_config_node)
@@ -213,6 +218,10 @@ class config_to_program:
                     )
 
                 parsed_args = ap.parse_args()
+
+                if parsed_args.debug:
+                    from .logging import configure_logging
+                    configure_logging.debug()
 
                 if parsed_args.config:
                     config = yaml.safe_load(
@@ -235,17 +244,22 @@ class config_to_program:
                         )
 
                 if parsed_args.print in {'input', 'i'}:
+                    print('-----------------------')
                     print('INPUT CONFIG:')
                     print(yaml.safe_dump(config, indent=2).strip())
+                    print('-----------------------')
                     return lambda: None
 
                 config = local_config_node(config)
 
                 if parsed_args.print in {'parsed', 'p', 'continue', 'c'}:
+                    print('-----------------------')
                     print('PARSED CONFIG:')
                     print(config_to_yaml(config, indent=2).strip())
+                    print('-----------------------')
                     if parsed_args.print not in {'continue', 'c'}:
                         return lambda: None
+
 
                 return fn(config, **kwargs)
 

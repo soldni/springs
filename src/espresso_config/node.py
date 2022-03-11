@@ -11,6 +11,7 @@ import yaml
 
 from .utils import MISSING, hybridmethod
 
+logging.basicConfig(level=logging.DEBUG)
 
 # get logger for this file, mostly used for debugging
 LOGGER = logging.getLogger(__name__)
@@ -531,9 +532,16 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     #           the constructor instead of just `param_value`.
                     #           We accomplish that with a partial decorator.
                     debug_call('3.1.ann_subnode')
-                    param_type = functools.partial(
-                        param_type, __parent__=self, __name__=param_name
-                    )
+
+                    # It only makes sense to do this replacement
+                    # if the parameter provided is a dict or a ConfigNode,
+                    # because those can be parsed by a config node.
+                    if isinstance(param_value, (dict, ConfigNode)):
+                        param_type = functools.partial(
+                            param_type, __parent__=self, __name__=param_name
+                        )
+                    else:
+                        param_type = lambda x: x
                 elif isinstance(param_value, param_type):
                     # We cast to param_type, but only if we absolutely
                     # have to. This prevents unwanted initializations is
@@ -558,9 +566,22 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 #         the subnode and set that as parameter value
                 debug_call('4.subnode')
 
-                param_value = subnodes[param_name](config=param_value,
-                                                   __parent__=self,
-                                                   __name__=param_name)
+                if isinstance(param_value, (dict, ConfigNode)):
+                    # note that calling the subnode init method here
+                    # only make sense if we are dealing with a supported
+                    # type (a dict or another config node). If not, it
+                    # does not make much sense to call the constructor,
+                    # as it would lead to errors down the line.
+                    # NOTE: we could call it if param_value is none too,
+                    # but we assume that if a user has specified a None
+                    # here, they do not want to instantiate a subnode.
+                    # if they still wish to, they could simply pass {} instead.
+                    debug_call('4.1.subnode_applied')
+                    param_value = subnodes[param_name](config=param_value,
+                                                       __parent__=self,
+                                                       __name__=param_name)
+                else:
+                    debug_call('4.2.subnode_skipped')
             elif __flex_node__:
                 # CASE 5: I don't recognize this key, but I'm in flex config
                 #         mode so I'll just add it to this node object
