@@ -11,23 +11,24 @@ import yaml
 
 from .utils import MISSING, hybridmethod
 
-logging.basicConfig(level=logging.DEBUG)
 
 # get logger for this file, mostly used for debugging
 LOGGER = logging.getLogger(__name__)
 
 
 # Type declaration for classes
+T = TypeVar("T")
 CN = TypeVar('CN', bound='ConfigNode')
 CV = TypeVar('CV', bound='ConfigPlaceholderVar')
 CP = TypeVar('CP', bound='ConfigParam')
 CR = TypeVar('CR', bound='ConfigNodeProps')
 CE = TypeVar('CE', bound='ConfigRegistryReference')
-
+PS = TypeVar('PS', bound='ParameterSpec')
 
 # Constants
 CONFIG_NODE_PROPERTIES_NAME = '__node__'
 CONFIG_NODE_REGISTRY_SEPARATOR = '@'
+CONFIG_PARAM_CLI_FORMAT = r'([a-zA-Z_]\w*)(\.([a-zA-Z_]\w*))*=.*'
 CONFIG_PLACEHOLDER_VAR_TEMPLATE = (
     r'\$\{(([a-zA-Z_]\w*)\.?)*(%s[a-zA-Z_]+)*\}' %
     CONFIG_NODE_REGISTRY_SEPARATOR
@@ -35,12 +36,29 @@ CONFIG_PLACEHOLDER_VAR_TEMPLATE = (
 
 
 class ParameterSpec(NamedTuple):
+    """Holds a parameter spec. Can be instantiated from either string or
+    by passing the attributes directly."""
+
     name: str
-    default: Any
-    type: Type[Any]
+    default: T
+    type: Type[T]
+
+    @classmethod
+    def from_string(cls: Type[PS], string: str) -> PS:
+        if not re.findall(CONFIG_PARAM_CLI_FORMAT, string):
+            msg = f"Cannot parse string '{string}' into a parameter"
+            raise ValueError(msg)
+        name, default = string.split('=', 1)
+        default = yaml.safe_load(default)
+        return cls(name=name, default=default, type=type(default))
+
+    def to_dict(self: PS) -> dict:
+        outdict = None
+        for part in self.name.split('.')[::-1]:
+            outdict = {part: outdict} if outdict else {part: self.default}
+        return outdict
 
 
-T = TypeVar("T")
 class ConfigParam(Generic[CP]):
     """Type wrapper to indicate parameters in a config node."""
     type: T
@@ -66,7 +84,7 @@ class ConfigRegistryReference(Generic[CE]):
     def name_as_placeholder_variable(self: CE):
         """Split the name (if provided) to be used
         as the path for placeholder variable"""
-        if self.param_name is not None:
+        if self.param_name:
             return self.param_name.split('.')
         return None
 
@@ -83,7 +101,7 @@ class ConfigRegistryReference(Generic[CE]):
                        registry_args=args)
 
     def resolve(self: CE,
-                param_value: Any,
+                *args,
                 nodes_cls: Sequence[CN] = None,
                 **kwargs) -> Any:
         """Resolves and instantiates a reference to a registry object using
@@ -94,7 +112,7 @@ class ConfigRegistryReference(Generic[CE]):
 
         if self.registry_ref is None:
             # no-op if there is no registry ref!
-            return param_value
+            return args[0] if len(args) == 1 else args
 
         nodes_cls = nodes_cls or []
 
@@ -102,24 +120,26 @@ class ConfigRegistryReference(Generic[CE]):
         registry_reference = ConfigRegistry.get(self.registry_ref)
 
         for node_cls in nodes_cls:
+
             if isclass(node_cls) and not issubclass(node_cls, ConfigNode):
                 msg = ('The registry reference resolver has receive an object'
                        f'of type {node_cls}, which is not a ConfigNode')
                 raise ValueError(msg)
+
             if (isclass(registry_reference) and
                 not issubclass(registry_reference, ConfigNode)):
                 msg = ('The registry reference resolver has received one or '
                        'more ConfigNode, but they cannot be merged with a '
                        f'registry reference of type {type(registry_reference)}')
                 raise ValueError(msg)
+
             registry_reference = registry_reference >> node_cls
 
-        return registry_reference(param_value, *self.registry_args, **kwargs)
+        return registry_reference(*args, *self.registry_args, **kwargs)
 
     @classmethod
     def contains(cls, string: str) -> bool:
         return CONFIG_NODE_REGISTRY_SEPARATOR in string
-
 
 
 class ConfigNodeProps(Generic[CR]):
@@ -229,7 +249,7 @@ class ConfigNodeProps(Generic[CR]):
 
     @hybridmethod
     def get_all_parameters(cls: Type[CR],
-                           node_cls: Type[CN]) -> Dict[str, ParameterSpec]:
+                           node_cls: Type[CN]) -> Sequence[ParameterSpec]:
         """Get all parameters for this node as well as for its subnodes."""
 
         all_parameters = []
@@ -254,7 +274,7 @@ class ConfigNodeProps(Generic[CR]):
         return all_parameters
 
     @get_all_parameters.instancemethod
-    def get_all_parameters(self: CR) -> Dict[str, ParameterSpec]:
+    def get_all_parameters(self: CR) -> Sequence[ParameterSpec]:
         return type(self).get_all_parameters(self.node_cls)
 
     def assign_param(self, name: str, value: Any, annotation: Any = None):

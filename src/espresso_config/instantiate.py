@@ -1,11 +1,11 @@
 import copy
 import functools
 import importlib
+import itertools
 from typing import Any, Callable, Dict, Sequence, Type, TypeVar, Union
 
 from .functional import config_from_dict
 from .node import ConfigNode, ConfigNodeProps, Generic
-
 
 IT = TypeVar('IT', bound='InitLater')
 GC = TypeVar('GC', bound='get_callable')
@@ -34,13 +34,21 @@ class InitLater(functools.partial, Generic[IT]):
         # or if it is "False" (it's a no-op)
         return self.func != self._no_op
 
-    def __call__(self, /, *args, **keywords):
+    def __call__(self, /, *args, **kwargs):
         # recursively call deferred initialization if
         # we encounter another InitLater
-        args = [v() if isinstance(v, InitLater) else v for v in args]
-        keywords = {k: v() if isinstance(v, InitLater) else v
-                    for k, v in {**self.keywords, **keywords}.items()}
-        return self.func(*self.args, *args, **keywords)
+        args = [v() if isinstance(v, InitLater) else v
+                for v in itertools.chain(self.args, args)]
+        kwargs = {k: v() if isinstance(v, InitLater) else v
+                    for k, v in {**self.keywords, **kwargs}.items()}
+        try:
+            return self.func(*args, **kwargs)
+        except Exception as e:
+            msg = (f'An error occurred while trying to '
+                   f'initialize {self.func.__name__} with '
+                   f'arguments {args} and kwargs {kwargs}.')
+            raise type(e)(msg) from e
+
 
 
 class get_callable:

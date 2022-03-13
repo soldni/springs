@@ -4,7 +4,6 @@ from typing import Callable, Generic, Type, TypeVar, Union
 from .functional import config_from_dict
 from .node import ConfigNode, ConfigParam
 
-
 CR = TypeVar('CR', bound='ConfigRegistry')
 RegistrableType = Union[Type[ConfigNode],Callable]
 

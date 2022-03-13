@@ -10,8 +10,8 @@ from .functional import (
     config_from_string,
     config_to_dict,
     config_to_yaml,
-    config_to_program
 )
-from . import defaults as _defaults
+from . import builtin_refs as _builtin_refs
 from .instantiate import instantiate
 from .logging import configure_logging
+from .commandline import cli

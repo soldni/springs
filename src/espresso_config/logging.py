@@ -1,17 +1,17 @@
-from typing import Union
 import logging
 import os
 from multiprocessing import current_process
+from typing import Union
 
 from .utils import mkdir_p
 
 
 class configure_logging:
-    DEBUG_MODE = None
+    _DEBUG_MODE = None
 
     @classmethod
     def debug(cls, *args, logging_level=None, **kwargs):
-        cls.DEBUG_MODE = True
+        cls._DEBUG_MODE = True
         return cls(*args, logging_level=logging.DEBUG, **kwargs)
 
     def __new__(
@@ -34,7 +34,7 @@ class configure_logging:
             logging_level = getattr(logging, logging_level)
 
         # we abide by the global debugging flag
-        logging_level = logging.DEBUG if cls.DEBUG_MODE else logging_level
+        logging_level = logging.DEBUG if cls._DEBUG_MODE else logging_level
 
         # change how the formatter looks
         kw = root_formatter_kwargs or {}

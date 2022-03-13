@@ -1,10 +1,69 @@
-
+import copy
 import errno
+import itertools
 import os
-from ast import literal_eval
-from typing import Any, Callable, Type
+import shutil
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Callable, Sequence, Type
 
 import smart_open
+import yaml
+
+
+def merge_nested_dicts(*dicts: Sequence[dict]) -> dict:
+    # all the merging is done in a new dict, not in place
+    out = {}
+
+    for d in dicts:
+        for k, v in d.items():
+            # k altready exists in out, and both subkeys
+            # are dictionaries: we recursively call merge_nested_dicts
+            is_subdict_to_merge = (k in out and
+                                   isinstance(v, dict) and
+                                   isinstance(out[k], dict))
+            if is_subdict_to_merge:
+                v = merge_nested_dicts(out[k], v)
+
+            # assign either the value v or the nested merge
+            out[k] = copy.deepcopy(v)
+
+    return out
+
+
+class MultiValueEnum(Enum):
+    """An enum that can accept multiple values.
+    Adapted from https://stackoverflow.com/a/43210118"""
+
+    def __new__(cls, *values):
+        obj = object.__new__(cls)
+
+        # first value is canonical value
+        obj._value_, *other_values = values
+
+        # the others are mapped to the canonical
+        for other_value in other_values:
+            cls._value2member_map_[other_value] = obj
+        obj._all_values = values
+        return obj
+
+    def __repr__(self):
+        all_values = ', '.join(repr(v) for v in self._all_values)
+        return f'<{self.__class__.__name__}.{self._name_}: {all_values}>'
+
+    @classmethod
+    def items(cls):
+        return iter(cls)
+
+    @classmethod
+    def keys(cls):
+        return (elem._name_ for elem in cls.items())
+
+    @classmethod
+    def values(cls):
+        return itertools.chain.from_iterable(
+            elem._all_values for elem in cls.items()
+        )
 
 
 def mkdir_p(path):
@@ -45,11 +104,52 @@ class hybridmethod:
         return self.f_instance.__get__(instance, cls)
 
 
-class MISSING:
-    """Used to keep track of missing parameters"""
+@dataclass
+class PrintUtils:
+    """A few utilities to make printing easier"""
+    indent_step: int = 2
+    indent_char: str = ' '
+    separator_char: str = '-'
+    terminal_width: int = field(default=shutil.get_terminal_size().columns)
 
-    def __repr__(self) -> str:
-        return 'MISSING'
+    def indent(self, line: str, level: int) -> str:
+        indent = self.indent_char * level * self.indent_step
+        return indent + line
+
+    def separator(self, level: int = 0) -> str:
+        separator = self.separator_char * self.terminal_width
+        return self.indent(separator, level=level)
+
+    def to_yaml(self,
+                content: dict,
+                level: int = 0,
+                yaml_fn: Callable = None) -> dict:
+        if not content:
+            # this is in case the dict/list is empty
+            return str(content)
+
+        yaml_fn = yaml_fn or yaml.safe_dump
+
+        out = yaml_fn(content,
+                      indent=self.indent_step,
+                      width=self.terminal_width,
+                      default_flow_style=False)
+        out = '\n'.join(self.indent(ln, level)
+                        for ln in out.strip().split('\n')).rstrip()
+        return out
+
+
+class _MissingMetaClass(type):
+    def __str__(cls) -> str:
+        return '???'
+
+    def __repr__(cls) -> str:
+        return f'{cls.__name__}({str(cls)})'
+
+
+class MISSING(metaclass=_MissingMetaClass):
+    """Used to keep track of missing parameters"""
+    ...
 
 
 def type_evaluator(field_type: Type[Any]) -> Callable:
@@ -58,11 +158,8 @@ def type_evaluator(field_type: Type[Any]) -> Callable:
 
     def _type_fn(value: str) -> field_type:
         if not issubclass(field_type, str):
-            # unless the type is string, we use literal
-            # eval to cast to a built in python type;
-            # literal_eval supports things such as list, dict,
-            # etc. too!
-            value = literal_eval(value)
+            # we use yaml to do the casting!
+            value = yaml.safe_load(value)
 
         return field_type(value)
     return _type_fn
@@ -74,3 +171,13 @@ def read_raw_file(file_path: str) -> str:
     with smart_open.open(file_path, mode='r', encoding='utf-8') as f:
         content = f.read()
     return content
+
+
+def resolve_path(path: str) -> str:
+    return os.path.realpath(
+        os.path.abspath(
+            os.path.expanduser(path)
+            if '~' in path
+            else path
+        )
+    )
