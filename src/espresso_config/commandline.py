@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import Callable, Type
+from typing import Callable, Sequence, Type, Union
 
 import yaml
 
@@ -18,6 +18,25 @@ class PrintEnum(MultiValueEnum):
     CONTINUE = 'c', 'continue'
     INPUTS = 'i', 'inputs'
     DEFAULTS = 'd', 'defaults'
+
+class PrintingSteps:
+    def __init__(self,
+                 print_steps: Sequence[PrintEnum] = None):
+        self.print_steps = set(print_steps) or {}
+
+    def do_step(self, step_name: PrintEnum) -> bool:
+        if step_name in self.print_steps:
+            self.print_steps.remove(step_name)
+            return True
+        return False
+
+    def has_more_steps(self) -> bool:
+        return len(self.print_steps) == 0
+
+    def will_print(self) -> bool:
+        return (len(self.print_steps) > 0  and
+                self.print_steps != {PrintEnum.CONTINUE})
+
 
 class cli:
     @classmethod
@@ -95,7 +114,7 @@ class cli:
         opts, _args = ap.parse_known_args()
 
         # set some default options for when no options are provided
-        opts.print = set(opts.print) or {PrintEnum.PARSED, PrintEnum.CONTINUE}
+        printing_steps = PrintingSteps(opts.print)
 
         # setup debug
         if opts.debug:
@@ -106,19 +125,18 @@ class cli:
         # Setup printing, including adding an initial
         # separator in case we want to print anything
         pu = PrintUtils()
-        if len(opts.print) > 0 and opts.print != {PrintEnum.CONTINUE}:
+        if printing_steps.will_print():
             # print a nice separator
             print(pu.separator())
 
         # Print default options if requested py the user
-        if PrintEnum.DEFAULTS in opts.print:
+        if printing_steps.do_step(PrintEnum.DEFAULTS):
             print('CLI OPTIONS:')
             params = ConfigNodeProps.get_all_parameters(config_node)
 
             for p in params:
                 p = f'{p.name}: {p.type.__name__} = {p.default}'
                 print(pu.indent(p, 1))
-
             print(pu.separator())
 
         # reads and parse teh command line and file configs (if provided)
@@ -133,7 +151,7 @@ class cli:
         config = merge_nested_dicts(file_config, cli_config)
 
         # print both configs if requested
-        if PrintEnum.INPUTS in opts.print:
+        if printing_steps.do_step(PrintEnum.INPUTS):
             print('INPUT PARAMETERS:')
             print(pu.indent('CLI:', 1), end='\n' if cli_config else ' ')
             print(pu.to_yaml(cli_config, level=2))
@@ -141,22 +159,26 @@ class cli:
             print(pu.to_yaml(file_config, level=2))
             print(pu.separator())
 
+        if printing_steps.has_more_steps():
+            # nothing more to do, let's not risk
+            # parsing, which might cause an error!
+           return InitLater.no_op()
+
         # load configuration with node parsers
-        config = config_node(config)
+        parsed_config = config_node(config)
 
         # print it if requested
-        if PrintEnum.PARSED in opts.print:
+        if printing_steps.do_step(PrintEnum.PARSED):
             print('PARSED CONFIG:')
-            print(pu.to_yaml(config, level=1, yaml_fn=config_to_yaml))
+            print(pu.to_yaml(parsed_config, level=1, yaml_fn=config_to_yaml))
             print(pu.separator())
 
-        # Continue if asked to, stop otherwise
-        # (you stop by returning a lambda that does nothing)
-        if PrintEnum.CONTINUE in opts.print:
-            return func(config, **kwargs)
-        else:
-            return InitLater.no_op()
+        if printing_steps.do_step(PrintEnum.CONTINUE):
+            # we execute the main method
+            return func(parsed_config, **kwargs)
 
+        # this will do nothing when called
+        return InitLater.no_op()
 
     def __new__(cls, config_node: Type[ConfigNode]) -> Callable:
         if not(isclass(config_node) or issubclass(config_node, ConfigNode)):
