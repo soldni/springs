@@ -22,7 +22,8 @@ class PrintEnum(MultiValueEnum):
 class PrintingSteps:
     def __init__(self,
                  print_steps: Sequence[PrintEnum] = None):
-        self.print_steps = set(print_steps) or {}
+        self.print_steps = set(print_steps) or {PrintEnum.PARSED,
+                                                PrintEnum.CONTINUE}
 
     def do_step(self, step_name: PrintEnum) -> bool:
         if step_name in self.print_steps:
