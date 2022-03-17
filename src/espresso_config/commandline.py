@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import Callable, Sequence, Type, Union
+from typing import Any, Callable, Generic, Optional, Sequence, Type, TypeVar
 
 import yaml
 
@@ -13,35 +13,40 @@ from .utils import (MultiValueEnum, PrintUtils, merge_nested_dicts,
                     read_raw_file, resolve_path)
 
 
+PS = TypeVar("PS", bound="PrintingSteps")
+CLI = TypeVar("CLI", bound="cli")
+
+
 class PrintEnum(MultiValueEnum):
     PARSED = 'p', 'parsed'
     CONTINUE = 'c', 'continue'
     INPUTS = 'i', 'inputs'
     DEFAULTS = 'd', 'defaults'
 
-class PrintingSteps:
-    def __init__(self,
-                 print_steps: Sequence[PrintEnum] = None):
+
+class PrintingSteps(Generic[PS]):
+    def __init__(self: PS,
+                 print_steps: Optional[Sequence[PrintEnum]] = None):
         self.print_steps = set(print_steps) or {PrintEnum.PARSED,
                                                 PrintEnum.CONTINUE}
 
-    def do_step(self, step_name: PrintEnum) -> bool:
+    def do_step(self: PS, step_name: PrintEnum) -> bool:
         if step_name in self.print_steps:
             self.print_steps.remove(step_name)
             return True
         return False
 
-    def has_more_steps(self) -> bool:
+    def has_more_steps(self: PS) -> bool:
         return len(self.print_steps) == 0
 
-    def will_print(self) -> bool:
+    def will_print(self: PS) -> bool:
         return (len(self.print_steps) > 0  and
                 self.print_steps != {PrintEnum.CONTINUE})
 
 
-class cli:
+class cli(Generic[CLI]):
     @classmethod
-    def _check_signature(cls, func):
+    def _check_signature(cls: Type[CLI], func: Callable):
         expected_args = getfullargspec(func).args
         if len(expected_args) == 0:
             msg = (f'Function `{func.__name__}` cannot be decorated '
@@ -57,7 +62,7 @@ class cli:
             raise RuntimeError(msg)
 
     @classmethod
-    def _check_args(cls, func, args):
+    def _check_args(cls: Type[CLI], func: Callable, args: Sequence[Any]):
         if len(args):
             msg = (f'After decorating `{func.__name__}` with '
                    f'`config_to_program`, do not provide any additional '
@@ -66,7 +71,7 @@ class cli:
             raise RuntimeError(msg)
 
     @classmethod
-    def _make_argument_parser(cls,
+    def _make_argument_parser(cls: Type[CLI],
                               func: Callable,
                               config_node: ConfigNode) -> ArgumentParser:
         # setup argparse
@@ -105,7 +110,17 @@ class cli:
         return ap
 
     @classmethod
-    def _wrapped_main_method(cls, func, config_node, *args, **kwargs):
+    def _wrapped_main_method(cls: Type[CLI],
+                             func: Callable,
+                             config_node: ConfigNode,
+                             print_fn: Optional[Callable] = None,
+                             *args,
+                             **kwargs) -> Callable:
+
+        # use_default_print_fn = print_fn is None
+        # if use_default_print_fn:
+        #     print_fn = print_fn or print
+
         # Making sure I can decorate this function
         cls._check_signature(func=func)
         cls._check_args(func=func, args=args)
@@ -125,20 +140,19 @@ class cli:
 
         # Setup printing, including adding an initial
         # separator in case we want to print anything
-        pu = PrintUtils()
-        if printing_steps.will_print():
-            # print a nice separator
-            print(pu.separator())
+        pu = PrintUtils(print_fn=print_fn)
 
         # Print default options if requested py the user
         if printing_steps.do_step(PrintEnum.DEFAULTS):
-            print('CLI OPTIONS:')
+
             params = ConfigNodeProps.get_all_parameters(config_node)
 
-            for p in params:
-                p = f'{p.name}: {p.type.__name__} = {p.default}'
-                print(pu.indent(p, 1))
-            print(pu.separator())
+            cli_opts_repr = ('CLI OPTIONS:', ) + tuple(
+                f'{p.name}: {p.type.__name__} = {p.default}'
+                for p in params
+            )
+
+            pu.print(*cli_opts_repr, level_up=1)
 
         # reads and parse teh command line and file configs (if provided)
         cli_config = merge_nested_dicts(*[
@@ -153,12 +167,8 @@ class cli:
 
         # print both configs if requested
         if printing_steps.do_step(PrintEnum.INPUTS):
-            print('INPUT PARAMETERS:')
-            print(pu.indent('CLI:', 1), end='\n' if cli_config else ' ')
-            print(pu.to_yaml(cli_config, level=2))
-            print(pu.indent('FILE:', 1), end='\n' if file_config else ' ')
-            print(pu.to_yaml(file_config, level=2))
-            print(pu.separator())
+            pu.print('INPUT/COMMAND LINE:', cli_config)
+            pu.print('INPUT/CONFIG FILE:', file_config)
 
         if printing_steps.has_more_steps():
             # nothing more to do, let's not risk
@@ -170,9 +180,7 @@ class cli:
 
         # print it if requested
         if printing_steps.do_step(PrintEnum.PARSED):
-            print('PARSED CONFIG:')
-            print(pu.to_yaml(parsed_config, level=1, yaml_fn=config_to_yaml))
-            print(pu.separator())
+            pu.print('PARSED CONFIG:', parsed_config, yaml_fn=config_to_yaml)
 
         if printing_steps.do_step(PrintEnum.CONTINUE):
             # we execute the main method
@@ -181,11 +189,14 @@ class cli:
         # this will do nothing when called
         return InitLater.no_op()
 
-    def __new__(cls, config_node: Type[ConfigNode]) -> Callable:
+    def __new__(cls,
+                config_node: Type[ConfigNode],
+                print_fn: Optional[Callable] = None) -> partial:
         if not(isclass(config_node) or issubclass(config_node, ConfigNode)):
             msg = f'`config_node` is not a subclass of {ConfigNode.__name__}'
             raise ValueError(msg)
 
         return lambda func: wraps(func)(partial(cls._wrapped_main_method,
                                                 config_node=config_node,
+                                                print_fn=print_fn,
                                                 func=func))

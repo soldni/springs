@@ -107,10 +107,54 @@ class hybridmethod:
 @dataclass
 class PrintUtils:
     """A few utilities to make printing easier"""
+
     indent_step: int = 2
     indent_char: str = ' '
     separator_char: str = '-'
     terminal_width: int = field(default=shutil.get_terminal_size().columns)
+    print_fn: Callable = None
+
+    def __post_init__(self):
+        self.print_fn = self.print_fn or print
+        self.has_printed_first_separator = False
+        self.is_default_print = self.print_fn is print
+
+    def print(self,
+              *lines,
+              level: int = 0,
+              level_up: int = None,
+              yaml_fn: Callable = None):
+
+        # avoid circular imports
+        from .node import ConfigNode
+
+        level_up = level_up or float('inf')
+
+        content = ''
+        if self.is_default_print:
+            if not self.has_printed_first_separator:
+                content += self.separator()
+            self.has_printed_first_separator = True
+
+        for line in lines:
+            if not line:
+                # backtrack the new line you just added from previous
+                # argument if the current argument evals to none, like
+                # an empty string, or an empty dict
+                content = f'{content.rstrip()} '
+
+            if isinstance(line, (dict, ConfigNode)):
+                content += f'{self.to_yaml(line, level, yaml_fn)}\n'
+            else:
+                content += f'{self.indent(line, level)}\n'
+
+            if level < level_up:
+                level += 1
+
+        if self.is_default_print:
+            content += f'{self.separator()}\n'
+
+        self.print_fn(content.rstrip())
 
     def indent(self, line: str, level: int) -> str:
         indent = self.indent_char * level * self.indent_step
