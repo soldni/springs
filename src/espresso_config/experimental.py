@@ -35,6 +35,13 @@ class ConfigParamMultiType(ConfigParam):
         class MultiType(metaclass=MultiTypeMeta):
             types = target_types
 
+            def __str__(self):
+                types_repr = ", ".join(repr(t) for t in self.types)
+                return f'{self.__class__.__name__}(types_repr)'
+
+            def __repr__(self):
+                return self.__str__()
+
             def __new__(cls, to_cast):
                 if not isinstance(to_cast, cls.types):
 
@@ -54,6 +61,11 @@ class ConfigParamMultiType(ConfigParam):
                     if exception is not None:
                         raise exception
 
+        target_type_repr = ', '.join(t.__name__ for t in target_types)
+
         class ConfigTypedParam(cls):
-            type = MultiType
+            # the call to type fn is hacky, but allows this class to
+            # have a custom name that includes the types
+            type = type(f'MultiType({target_type_repr})', (MultiType, ), {})
+
         return ConfigTypedParam

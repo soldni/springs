@@ -18,6 +18,11 @@ class InitLater(functools.partial, Generic[IT]):
         provided to an InitLater object"""
         return self.keywords.get(*args, **kwargs)
 
+    def pop_kw(self, *args, **kwargs):
+        """Shortcut for popping parameters that have been
+        provided to an InitLater object"""
+        return self.keywords.pop(*args, **kwargs)
+
     @staticmethod
     def _no_op():
         ...

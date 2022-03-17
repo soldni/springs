@@ -117,10 +117,6 @@ class cli(Generic[CLI]):
                              *args,
                              **kwargs) -> Callable:
 
-        # use_default_print_fn = print_fn is None
-        # if use_default_print_fn:
-        #     print_fn = print_fn or print
-
         # Making sure I can decorate this function
         cls._check_signature(func=func)
         cls._check_args(func=func, args=args)
@@ -138,8 +134,7 @@ class cli(Generic[CLI]):
             from .logging import configure_logging
             configure_logging.debug()
 
-        # Setup printing, including adding an initial
-        # separator in case we want to print anything
+        # Setup an utility to deal with printing
         pu = PrintUtils(print_fn=print_fn)
 
         # Print default options if requested py the user
