@@ -1,6 +1,6 @@
 import os
 from inspect import isclass
-from typing import Any, Callable, Dict, Type, Union
+from typing import Any, Callable, Dict, Type, Union, Optional
 
 import yaml
 
