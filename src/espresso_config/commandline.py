@@ -114,6 +114,7 @@ class cli(Generic[CLI]):
                              func: Callable,
                              config_node: ConfigNode,
                              print_fn: Optional[Callable] = None,
+                             open_fn: Optional[Callable] = None,
                              *args,
                              **kwargs) -> Callable:
 
@@ -153,8 +154,9 @@ class cli(Generic[CLI]):
         cli_config = merge_nested_dicts(*[
             ParameterSpec.from_string(a).to_dict() for a in _args
         ])
-        file_config = (yaml.safe_load(read_raw_file(opts.config))
-                        if opts.config else {})
+        file_config = (
+            yaml.safe_load(read_raw_file(opts.config, open_fn=open_fn))
+            if opts.config else {})
 
         # merge_nested_dicts is not commutative; cli_config gets
         # precedence over file config.
@@ -186,7 +188,8 @@ class cli(Generic[CLI]):
 
     def __new__(cls,
                 config_node: Type[ConfigNode],
-                print_fn: Optional[Callable] = None) -> partial:
+                print_fn: Optional[Callable] = None,
+                open_fn: Optional[Callable] = None) -> partial:
         if not(isclass(config_node) or issubclass(config_node, ConfigNode)):
             msg = f'`config_node` is not a subclass of {ConfigNode.__name__}'
             raise ValueError(msg)
@@ -194,4 +197,5 @@ class cli(Generic[CLI]):
         return lambda func: wraps(func)(partial(cls._wrapped_main_method,
                                                 config_node=config_node,
                                                 print_fn=print_fn,
+                                                open_fn=open_fn,
                                                 func=func))

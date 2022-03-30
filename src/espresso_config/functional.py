@@ -46,9 +46,10 @@ def config_from_string(string: str,
 def config_from_file(file_path: Union[os.PathLike, str],
                      *args,
                      config_node_cls: Type[ConfigNode] = None,
+                     open_fn: Optional[Callable] = None,
                      **kwargs) -> ConfigNode:
     """Same of `config_from_string`, but load from a file path instead"""
-    content = read_raw_file(file_path)
+    content = read_raw_file(file_path, open_fn=open_fn)
     return config_from_string(*args,
                               config_node_cls=config_node_cls,
                               string=content,

@@ -2,14 +2,13 @@ import copy
 import errno
 import itertools
 import os
+import re
 import shutil
 from dataclasses import dataclass, field
 from enum import Enum
-import re
 from textwrap import dedent
-from typing import Any, Callable, Sequence, Type
+from typing import Any, Callable, Optional, Sequence, Type
 
-import smart_open
 import yaml
 
 
@@ -217,10 +216,11 @@ def type_evaluator(field_type: Type[Any]) -> Callable:
     return _type_fn
 
 
-def read_raw_file(file_path: str) -> str:
-    """For reading the content of a file from multiple
-    providers."""
-    with smart_open.open(file_path, mode='r', encoding='utf-8') as f:
+def read_raw_file(file_path: str,
+                  open_fn: Optional[Callable] = None) -> str:
+    """For reading the content of a file."""
+    open_fn = open_fn or open
+    with open_fn(file_path, mode='r', encoding='utf-8') as f:
         content = f.read()
     return content
 
