@@ -51,8 +51,9 @@ class InitLater(functools.partial, Generic[IT]):
         except Exception as e:
             msg = (f'An error occurred while trying to '
                    f'initialize {self.func.__name__} with '
-                   f'arguments {args} and kwargs {kwargs}.')
-            raise type(e)(msg) from e
+                   f'arguments {args} and kwargs {kwargs}: '
+                   ' '.join(map(str, e.args)))
+            raise type(e)(msg).with_traceback(e.__traceback__)
 
 
 
