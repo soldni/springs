@@ -2,8 +2,11 @@ import copy
 import functools
 import importlib
 import itertools
+
 from typing import Any, Callable, Dict, Sequence, Type, TypeVar, Union
 
+from .exceptions import ConfigInstantiateError
+from .utils import clean_multiline
 from .functional import config_from_dict
 from .node import ConfigNode, ConfigNodeProps, Generic
 
@@ -49,12 +52,15 @@ class InitLater(functools.partial, Generic[IT]):
         try:
             return self.func(*args, **kwargs)
         except Exception as e:
-            msg = (f'An error occurred while trying to '
-                   f'initialize {self.func.__name__} with '
-                   f'arguments {args} and kwargs {kwargs}: '
-                   ' '.join(map(str, e.args)))
-            raise type(e)(msg).with_traceback(e.__traceback__)
-
+            ex_name = type(e).__name__
+            fn_name = self.func.__name__
+            msg = clean_multiline(f'''
+                An error occurred while trying to initialize {fn_name}
+                with arguments "{args}" and kwargs "{kwargs}":
+                {ex_name}("{' '.join(map(str, e.args))}")
+            ''')
+            raise ConfigInstantiateError(msg)\
+                .with_traceback(e.__traceback__)
 
 
 class get_callable:

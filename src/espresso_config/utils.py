@@ -5,10 +5,18 @@ import os
 import shutil
 from dataclasses import dataclass, field
 from enum import Enum
+import re
+from textwrap import dedent
 from typing import Any, Callable, Sequence, Type
 
 import smart_open
 import yaml
+
+
+def clean_multiline(string: str) -> str:
+    string = dedent(string.strip())
+    string = re.sub(r'\s*\n\s*', ' ', string)
+    return string
 
 
 def merge_nested_dicts(*dicts: Sequence[dict]) -> dict:
