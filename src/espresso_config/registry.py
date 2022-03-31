@@ -8,7 +8,12 @@ CR = TypeVar('CR', bound='ConfigRegistry')
 RegistrableType = Union[Type[ConfigNode],Callable]
 
 
-class ConfigRegistry(Generic[CR]):
+class MetaConfigRegistry(Type):
+    def __contains__(cls, name) -> bool:
+        return name in getattr(cls, '__registry__', {})
+
+
+class ConfigRegistry(Generic[CR], metaclass=MetaConfigRegistry):
     __registry__ = {}
 
     @classmethod
@@ -50,9 +55,8 @@ class ConfigRegistry(Generic[CR]):
         param_names = spec.args[1:]
         param_defaults = spec.defaults or []
 
-        param_annotations = {k: ConfigParam(v) for k, v
-                             in spec.annotations.items()}
-        param_annotations[instantiate.TARGET] = ConfigParam(str)
+        # get all annotations here
+        param_annotations = {instantiate.TARGET: str, **spec.annotations}
 
         # we need to zip from the back because kwargs are always at
         # the end! So if only 2 out of 4 parameters have keyword args,

@@ -88,7 +88,6 @@ class get_callable:
 
     def __new__(cls: Type[GC], path: str) -> Callable:
         cl_ = cls._get_callable(path)
-
         if cl_ is None:
             raise ModuleNotFoundError(f'Could not find `{path}`')
         return cl_
@@ -124,7 +123,11 @@ class instantiate:
             raise ValueError(msg)
 
         _target_ = ConfigNodeProps.get_props(config_node).pop(cls.TARGET)
-        fn = get_callable(_target_)
+        try:
+            fn = get_callable(_target_)
+        except Exception:
+            import ipdb
+            ipdb.set_trace()
 
         def _recursive_init(param):
             if (_recursive_ and

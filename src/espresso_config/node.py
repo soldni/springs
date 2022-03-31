@@ -1,10 +1,11 @@
 import copy
 import functools
+import json
 import logging
 import re
 from dataclasses import dataclass, field
 from inspect import getmembers, isclass, isroutine
-from typing import (Any, Dict, Generic, Iterable, List, NamedTuple, Optional,
+from typing import (Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional,
                     Sequence, Set, Tuple, Type, TypeVar, Union, get_type_hints)
 
 import yaml
@@ -59,7 +60,17 @@ class ParameterSpec(NamedTuple):
         return outdict
 
 
-class ConfigParam(Generic[CP]):
+class MetaConfigParam(type):
+    def __repr__(cls):
+        type_ = getattr(cls, 'type', None)
+        return f'{type(cls).__name__}({repr(type_)})'
+
+    def __str__(cls):
+        type_ = getattr(cls, 'type', None)
+        return f'{type(cls).__name__}({str(type_)})'
+
+
+class ConfigParam(Generic[CP], metaclass=MetaConfigParam):
     """Type wrapper to indicate parameters in a config node."""
     type: T
 
@@ -67,6 +78,19 @@ class ConfigParam(Generic[CP]):
         class ConfigTypedParam(cls):
             type = target_type
         return ConfigTypedParam
+
+
+# class ConfigParam(Generic[CP]):
+#     def __init__(self, target_type):
+#         self.type = target_type
+
+#     def __repr__(self):
+#         type_ = getattr(self, 'type', None)
+#         return f'{type(self).__name__}({repr(type_)})'
+
+#     def __str__(self):
+#         type_ = getattr(self, 'type', None)
+#         return f'{type(self).__name__}({str(type_)})'
 
 
 class ConfigRegistryReference(Generic[CE]):
@@ -321,11 +345,16 @@ class ConfigNodeProps(Generic[CR]):
         else:
             return self.get_props(self.parent).get_root()
 
-    def get_children(self: CN) -> Iterable[CN]:
+    def get_children(self: CN, recursive: bool = False) -> Iterable[CN]:
         """Get a iterable of all the subnodes to this config node"""
         for key, value in sorted(self.node):
             if isinstance(value, ConfigNode):
                 yield (key, value)
+                if recursive:
+                    ch_sub = ConfigNodeProps.get_props(value).get_children()
+                    for ch_key, ch_value in ch_sub:
+                        yield (f'{key}.{ch_key}', ch_value)
+
 
     def apply_vars(self: CR) -> Set[str]:
         """Resolve all variables by applying substitutions to its
@@ -349,6 +378,11 @@ class ConfigNodeProps(Generic[CR]):
                     if isinstance(v, ConfigNode) else
                     (repr(v) if isinstance(v, ConfigPlaceholderVar) else v))
                 for k, v in self.node}
+
+    def to_json(self: CR,
+                *args: Sequence[Any],
+                **kwargs: Dict[str, Any]) -> str:
+        return json.dumps(self.to_dict(), *args, **kwargs)
 
     def to_yaml(self: CR,
                 *args: Sequence[Any],
@@ -404,7 +438,6 @@ class MetaConfigNode(type):
                      {})
         return merged
 
-
     def __lshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
         return other_cls >> cls
 
@@ -423,12 +456,20 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         config: Optional[Union[Dict[str, Any], CN]] = None,
         __parent__ : CN = None,
         __flex_node__: bool = False,
-        __name__: str = None
+        __name__: str = None,
+        __annotations_override__: Optional[Dict[str, Type[CP]]] = None,
         ) -> None:
         # Parsing comes in 5 phases, each one is in a separate code block!
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # This is mostly preliminaries
+
+        # print info for useful debugging
+        LOGGER.debug(f'[PHASE 0.0][CLS {type(self).__name__}]\n'
+                     f' config: {config}\n'
+                     f'__parent__: {__parent__}\n'
+                     f'__flex_node__: {__flex_node__}\n'
+                     f'__name__: {__name__}\n')
 
         # Create a property object for this node; the object will bind
         # itself to it
@@ -439,9 +480,16 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # get annnotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
         # subnode to this config node.
-        annotations = node_props.get_annotations()
+        annotations = {**node_props.get_annotations(),
+                       **(__annotations_override__ or {})}
         defaults = node_props.get_defaults()
         subnodes = node_props.get_subnodes()
+
+        # print some debugging info again
+        LOGGER.debug(f'[PHASE 0.1][CLS {type(self).__name__}]\n'
+                     f'annotations: {annotations}\n'
+                     f'defaults: {defaults}\n'
+                     f'subnodes: {subnodes}\n')
 
         # if the config provided is empty, we try to make do with just default
         # values; we also check if it is of the right type (otherwise if it is
@@ -463,7 +511,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         for param_name, param_value in config.items():
             # a little lambda function to log how we are doing
             debug_call = lambda case: LOGGER.debug(
-                f'[PARSE CONFIG][{node_props.long_name}][{case}] {param_name}'
+                f'[PHASE 1][{node_props.long_name}][{case}] {param_name}'
             )
 
             if ConfigRegistryReference.contains(param_name):
@@ -620,6 +668,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        LOGGER.debug(f'[PHASE 2][CLS {type(self).__name__}]')
+
         # Try using default values for parameters with no override. To find
         # which parameters are still missing, we get a tuple of parameter names
         # initialized so far from the node properties object; then we use it
@@ -665,6 +715,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        LOGGER.debug(f'[PHASE 3][CLS {type(self).__name__}]')
+
         # Last set of assignments! Like we did with annotations, we need to
         # check if there are one or more submodules that have not been
         # initialized already through the config provided by the user.
@@ -682,12 +734,16 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        LOGGER.debug(f'[PHASE 4][CLS {type(self).__name__}]')
+
         # Finally, if this is a root class, we want to take care of replacing
         # variables with actual values; not going to do any late binding a la
         # hydra, with some minimal logic to catch cyclical assignments
         if node_props.is_root():
             node_props.apply_vars()
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+        LOGGER.debug(f'\n[DONE NODE INIT][CLS {type(self).__name__}]\n')
 
     def __iter__(self: CN) -> Iterable[Tuple[str, Any]]:
         """Get a iterable of names and parameters in this node,
@@ -701,12 +757,34 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 f'with params {ConfigNodeProps.get_props(self).to_dict()}>')
 
     def __contains__(self: CN,  key: str) -> bool:
-        return key in ConfigNodeProps.get_props(self).get_params_names()
+        key, *rest = key.split('.')
+        rest = '.'.join(rest)
+
+        has_node = key in ConfigNodeProps.get_props(self).get_params_names()
+        if rest:
+            node = getattr(self, key, None)
+            return has_node and isinstance(node, ConfigNode) and rest in node
+        else:
+            return has_node
 
     def __getitem__(self, key: str) -> Any:
         node_props = ConfigNodeProps.get_props(self)
+
+        key, *rest = key.split('.')
+        rest = '.'.join(rest)
+
         if key in node_props.get_params_names():
-            return getattr(self, key)
+            value = getattr(self, key)
+
+            if rest:
+                # attempt to traverse the tree
+                if isinstance(value, ConfigNode):
+                    value = value[rest]
+                else:
+                    msg = f'`{key}` is not a subnode, cannot get `{rest}`'
+                    raise KeyError(msg)
+
+            return value
         else:
             msg = f'`{key}` is not a parameter in {node_props.long_name}'
             raise KeyError(msg)
@@ -720,15 +798,51 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
     def __lshift__(self: CN, other: CN) -> CN:
         return other >> self
 
-    # def __deepcopy__(self: CN, *args, **kwargs) -> CN:
-    #     try:
-    #         config = ConfigNodeProps.get_props(self).to_dict()
-    #         return type(self)(config=config,
-    #                         __flex_node__=isinstance(self, ConfigFlexNode),
-    #                         __name__=ConfigNodeProps.get_props(self).short_name)
-    #     except Exception:
-    #         import ipdb
-    #         ipdb.set_trace()
+    @classmethod
+    def __init_from_tuple__(
+        cls: Type[CN],
+        init_kwargs: Dict[str, Any],
+        all_subnodes: Sequence[str]
+    ) -> CN:
+        obj = cls(**init_kwargs)
+        for subnode_name in all_subnodes:
+            if subnode_name not in obj:
+                msg = (f'Something when wrong; key {subnode_name} '
+                       'does not exist in copy')
+                raise RuntimeError(msg)
+
+            subnode = obj[subnode_name]
+            if not isinstance(subnode, ConfigNode):
+                msg = (f'All subnodes must be instances of {ConfigNode}, '
+                       f'not {type(subnode)}.')
+                from .registry import ConfigRegistry
+                if type(subnode).__name__ in ConfigRegistry:
+                    reg_entry = ConfigRegistry.get(type(subnode).__name__)
+                    msg += f' Hint: you might want to use {type(reg_entry)}.'
+                    raise ValueError(msg)
+
+        return obj
+
+    def __reduce__(self: CN) -> Tuple[Callable, Tuple[Dict[str, Any]]]:
+        LOGGER.debug(f'REDUCE called on {self}')
+
+        props = ConfigNodeProps.get_props(self)
+
+        annotations_override = {
+            param_name: ConfigParam(type(getattr(self, param_name)))
+            for param_name, param_spec in props.get_annotations().items()
+            if param_spec.type != type(getattr(self, param_name))
+        }
+
+        init_kwargs = dict(
+            config=props.to_dict(),
+            __flex_node__=isinstance(self, ConfigFlexNode),
+            __name__=props.short_name,
+            __annotations_override__=annotations_override
+        )
+        all_subnodes = [name for name, _ in props.get_children(recursive=True)]
+
+        return self.__init_from_tuple__, (init_kwargs, all_subnodes)
 
 
 @dataclass
@@ -762,8 +876,9 @@ class ConfigPlaceholderVar(Generic[CV]):
         self.param_name = param_name
         self.parent_node = parent_node
         self.unresolved_param_value = param_value
-        self.param_config_type = (param_config.type if param_config
-                                  is not None else lambda x: x)
+        self.param_config_type = (param_config.type
+                                  if param_config is not None
+                                  else lambda x: x)
         self.placeholder_vars = []
 
         # import here to avoid cycles

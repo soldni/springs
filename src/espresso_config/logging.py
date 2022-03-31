@@ -10,12 +10,13 @@ class configure_logging:
     _DEBUG_MODE = None
 
     @classmethod
-    def debug(cls, *args, logging_level=None, **kwargs):
+    def debug(cls, *args, logging_level=None, **kwargs) -> logging.Logger:
         cls._DEBUG_MODE = True
         return cls(*args, logging_level=logging.DEBUG, **kwargs)
 
     def __new__(
         cls,
+        logger_name: str = None,
         file_logging_path: str = None,
         make_dir_if_missing: bool = True,
         fmt: str = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
@@ -27,7 +28,7 @@ class configure_logging:
         file_handler_kwargs: dict = None,
         basic_config_kwargs: dict = None,
         additional_handlers: list = None,
-    ):
+    ) -> logging.Logger:
         """A big function that speeds up configuration of logging"""
 
         if isinstance(logging_level, str):
@@ -66,3 +67,4 @@ class configure_logging:
         logging.basicConfig(level=logging_level,
                             force=force_root_reattach,
                             handlers=handlers, **kw)
+        return logging.getLogger(logger_name)
