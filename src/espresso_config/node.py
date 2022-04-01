@@ -5,12 +5,14 @@ import logging
 import re
 from dataclasses import dataclass, field
 from inspect import getmembers, isclass, isroutine
-from typing import (Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional,
-                    Sequence, Set, Tuple, Type, TypeVar, Union, get_type_hints)
+from typing import (
+    Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional,
+    Sequence, Set, Tuple, Type, TypeVar, Union, get_type_hints
+)
 
 import yaml
 
-from .utils import MISSING, hybridmethod, merge_nested_dicts
+from .utils import MISSING, hybridmethod
 
 
 # get logger for this file, mostly used for debugging
@@ -123,6 +125,10 @@ class ConfigRegistryReference(Generic[CE]):
             return cls(param_name=param_name,
                        registry_ref=registry_ref,
                        registry_args=args)
+
+    def resolve_later(self: CE, **kwargs) -> CE:
+        self.resolve = functools.partial(self.resolve, **kwargs)
+        return self
 
     def resolve(self: CE,
                 *args,
@@ -591,30 +597,62 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 # registry_reference.resolve
                 nodes_cls_to_merge = []
                 if param_name in subnodes:
-                    # CASE 1.1: beside the key with just loaded, we also
-                    #           have a subnode with potentially some
-                    #           default parameters! fear not, we
-                    #           merge configs using operator `>>`
-                    debug_call('1.1.registry+submodule')
+                    # CASE 1.S1.1: beside the key with just loaded, we also
+                    #              have a subnode with potentially some
+                    #              default parameters! fear not, we
+                    #              merge configs using operator `>>`
+                    debug_call('1.S1.1.registry+submodule')
                     nodes_cls_to_merge.append(subnodes[param_name])
 
                 if (param_name in annotations and
                     issubclass(annotations[param_name].type, ConfigNode)):
-                    # CASE 1.2: we also need to merge with the type we also
-                    #           get from the parameter annotation. This is
-                    #           usually empty, but we merge with it for
-                    #           good measure too.
-                    debug_call('1.2.registry+annotation')
+                    # CASE 1.S1.2: we also need to merge with the type we also
+                    #              get from the parameter annotation. This is
+                    #              usually empty, but we merge with it for
+                    #              good measure too.
+                    debug_call('1.S1.2.registry+annotation')
                     nodes_cls_to_merge.append(annotations[param_name].type)
 
                 # Finally after a bunch of merging (maybe?), we can instantiate
                 # an object using the registry reference!
-                param_value = registry_reference.resolve(
-                    param_value,
-                    nodes_cls=nodes_cls_to_merge,
-                    __parent__=self,
-                    __name__=param_name
-                )
+
+                if ConfigPlaceholderVar.contains(param_value):
+                    # CASE 1.S2.1: The target parameter has a placeholder var
+                    #              so we can't quite solve this reference yet
+                    #              until the placeholder var is solved.
+                    debug_call('1.S2.1.registry+var_in_arg')
+
+                    # we call the resolve method of ConfigRegistryReference,
+                    # which allows us to pass some parameters to the
+                    # resolve method reference without actually running it.
+                    registry_reference = registry_reference.resolve_later(
+                        nodes_cls=nodes_cls_to_merge,
+                        __parent__=self,
+                        __name__=param_name
+                    )
+
+                    # creating a placeholder node and adding it
+                    # to the list of variables for this node. it will
+                    # be resolved later.
+                    param_value = ConfigPlaceholderVar(
+                        parent_node=self,
+                        outer_reg_ref=registry_reference,
+                        param_name=param_name,
+                        param_value=param_value,
+                        param_config=annotations.get(param_name, None)
+                    )
+                    node_props.add_var(param_value)
+                else:
+                    # CASE 1.S2.2: No variable is sight, so we can just go
+                    #              ahead and resolve this parameter value by
+                    #              calling the registry reference.
+                    debug_call('1.S2.2.registry+novar')
+                    param_value = registry_reference.resolve(
+                        param_value,
+                        nodes_cls=nodes_cls_to_merge,
+                        __parent__=self,
+                        __name__=param_name
+                    )
             elif ConfigPlaceholderVar.contains(param_value):
                 # CASE 2: you found a value with a variable in it; we save
                 #         it with the rest of the vars, and it will be
@@ -915,11 +953,13 @@ class ConfigPlaceholderVar(Generic[CV]):
         parent_node: ConfigNode,
         param_name: str,
         param_value: str,
+        outer_reg_ref: Optional[ConfigRegistryReference] = None,
         param_config: Optional[ConfigParam] = None
     ):
         self.param_name = param_name
         self.parent_node = parent_node
         self.unresolved_param_value = param_value
+        self.outer_registry_reference = outer_reg_ref
         self.param_config_type = (param_config.type
                                   if param_config is not None
                                   else lambda x: x)
@@ -1033,6 +1073,16 @@ class ConfigPlaceholderVar(Generic[CV]):
             # if is not a node, but a simple value, we use the specified
             # type to cast if necessary.
             replaced_value = self.param_config_type(replaced_value)
+
+        if self.outer_registry_reference:
+            # we have been provided an outer_registry_reference, i.e.,
+            # a registry that comes from the key part:
+            #   key_name@__registry_ref__: ${variable}
+            # now that we have resolved the variable, we can finally
+            # apply this registry reference before setting the attribute.
+            replaced_value = self.outer_registry_reference.resolve(
+                replaced_value
+            )
 
         # finally done with variable resolution, let's set the
         # parent to this value.

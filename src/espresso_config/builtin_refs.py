@@ -2,6 +2,33 @@ import os
 from datetime import datetime, timezone
 
 from .registry import ConfigRegistry
+from .instantiate import get_callable
+
+
+@ConfigRegistry.add
+def __is_type__(*args, **kwargs) -> str:
+    """Check if the provided value matches the target type.
+    Usage example:
+
+    ```yaml
+    foo: 3
+    bar: ${foo@__is_type__@int}     # this will eval True
+    baz@__is_type__@str: ${foo}     # this will eval False
+    ```
+    """
+    if len(args) < 2:
+        msg = ('__is_type__ expects two imputs, '
+               'e.g. ${path.to_node@__is_type__@target_type}'
+               'or key@__is_type__@target_type: ... .')
+        raise ValueError(msg)
+
+    node_source, target_type, *_ = args
+    target_type = get_callable(target_type)
+
+    if node_source == '${epochs}':
+        raise ValueError()
+
+    return isinstance(node_source, target_type)
 
 
 @ConfigRegistry.add
