@@ -123,11 +123,7 @@ class instantiate:
             raise ValueError(msg)
 
         _target_ = ConfigNodeProps.get_props(config_node).pop(cls.TARGET)
-        try:
-            fn = get_callable(_target_)
-        except Exception:
-            import ipdb
-            ipdb.set_trace()
+        fn = get_callable(_target_)
 
         def _recursive_init(param):
             if (_recursive_ and

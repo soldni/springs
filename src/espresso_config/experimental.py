@@ -4,41 +4,41 @@ from typing import Any, Sequence, Tuple, Type, Union
 from .node import ConfigNode, ConfigParam
 
 
-class _MultiType:
-    def __init__(self, types):
-        self.types = types
+class MultiTypeMeta(type):
+    types: Tuple[Type]
+
+    def __subclasscheck__(cls, __subclass: type) -> bool:
+        return issubclass(__subclass, cls.types)
+
+class MultiType(metaclass=MultiTypeMeta):
+    types = Tuple[Type]
+
+    def __str__(self):
+        types_repr = "|".join(repr(t) for t in self.types)
+        return f'{type(self).__name__}({types_repr})'
+
+    def __repr__(self):
+        return self.__str__()
 
     def __instancecheck__(cls, __instance: Any) -> bool:
         return isinstance(__instance, cls.types)
 
-    def __str__(self):
-        return f'{type(self).__name__}({self.__name__})'
-
-    def __repr__(self):
-        return str(self)
-
-    @property
-    def __name__(self):
-        return "|".join(t.__name__ for t in self.types)
-
-    def __call__(self, to_cast):
-        if not isinstance(to_cast, self.types):
-
-            # this is used to throw an exception if we
-            # cant cast. We can't immediately throw an exception,
-            # we need to try to cast to all types before giving up
-            exception: Union[Exception, None] = None
-
+    def __new__(cls, to_cast):
+        if not isinstance(to_cast, cls.types):
             # we try to cast one type at the time
-            for t in self.types:
+            for t in cls.types:
                 try:
-                    # we immediately return in case casting is successful
+                    # we immediately return in case
+                    # casting is successful
                     return t(to_cast)
-                except Exception as e:
-                    exception = e
 
-            if exception is not None:
-                raise exception
+                except Exception as e:
+                    ...
+
+            msg = (f'`{to_cast}` cannot be casted to ' +
+                   ", ".join(t.__name__ for t in cls.types))
+            raise ValueError(msg)
+        return to_cast
 
 
 class ConfigParamMultiType(ConfigParam):
@@ -59,4 +59,11 @@ class ConfigParamMultiType(ConfigParam):
                     'ConfigNode as one of the provided types.')
             raise ValueError(msg)
 
-        self.type = _MultiType(target_types)
+        self._types = target_types
+
+    @property
+    def type(self):
+        target_type_repr = ', '.join(t.__name__ for t in self._types)
+        return type(f'MultiType({target_type_repr})',
+                    (MultiType, ),
+                    {'types': self._types})
