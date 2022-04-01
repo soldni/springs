@@ -12,11 +12,14 @@ class _MultiType:
         return isinstance(__instance, cls.types)
 
     def __str__(self):
-        types_repr = ", ".join(repr(t) for t in self.types)
-        return f'{self.__class__.__name__}({types_repr})'
+        return f'{type(self).__name__}({self.__name__})'
 
     def __repr__(self):
-        return self.__str__()
+        return str(self)
+
+    @property
+    def __name__(self):
+        return "|".join(t.__name__ for t in self.types)
 
     def __call__(self, to_cast):
         if not isinstance(to_cast, self.types):
@@ -29,15 +32,13 @@ class _MultiType:
             # we try to cast one type at the time
             for t in self.types:
                 try:
-                    # we immediately return in case
-                    # casting is successful
+                    # we immediately return in case casting is successful
                     return t(to_cast)
                 except Exception as e:
                     exception = e
 
             if exception is not None:
                 raise exception
-
 
 
 class ConfigParamMultiType(ConfigParam):
