@@ -10,7 +10,7 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Op
 
 import yaml
 
-from .utils import MISSING, hybridmethod
+from .utils import MISSING, hybridmethod, merge_nested_dicts
 
 
 # get logger for this file, mostly used for debugging
@@ -60,37 +60,37 @@ class ParameterSpec(NamedTuple):
         return outdict
 
 
-class MetaConfigParam(type):
-    def __repr__(cls):
-        type_ = getattr(cls, 'type', None)
-        return f'{type(cls).__name__}({repr(type_)})'
+# class MetaConfigParam(type):
+#     def __repr__(cls):
+#         type_ = getattr(cls, 'type', None)
+#         return f'{type(cls).__name__}({repr(type_)})'
 
-    def __str__(cls):
-        type_ = getattr(cls, 'type', None)
-        return f'{type(cls).__name__}({str(type_)})'
-
-
-class ConfigParam(Generic[CP], metaclass=MetaConfigParam):
-    """Type wrapper to indicate parameters in a config node."""
-    type: T
-
-    def __new__(cls: Type[CP], target_type: T) -> T:
-        class ConfigTypedParam(cls):
-            type = target_type
-        return ConfigTypedParam
+#     def __str__(cls):
+#         type_ = getattr(cls, 'type', None)
+#         return f'{type(cls).__name__}({str(type_)})'
 
 
-# class ConfigParam(Generic[CP]):
-#     def __init__(self, target_type):
-#         self.type = target_type
+# class ConfigParam(Generic[CP], metaclass=MetaConfigParam):
+#     """Type wrapper to indicate parameters in a config node."""
+#     type: T
 
-#     def __repr__(self):
-#         type_ = getattr(self, 'type', None)
-#         return f'{type(self).__name__}({repr(type_)})'
+#     def __new__(cls: Type[CP], target_type: T) -> T:
+#         class ConfigTypedParam(cls):
+#             type = target_type
+#         return ConfigTypedParam
 
-#     def __str__(self):
-#         type_ = getattr(self, 'type', None)
-#         return f'{type(self).__name__}({str(type_)})'
+
+class ConfigParam(Generic[CP]):
+    def __init__(self, target_type):
+        self.type = target_type
+
+    def __repr__(self):
+        type_ = getattr(self, 'type', None)
+        return f'{type(self).__name__}({repr(type_)})'
+
+    def __str__(self):
+        type_ = getattr(self, 'type', None)
+        return f'{type(self).__name__}({str(type_)})'
 
 
 class ConfigRegistryReference(Generic[CE]):
@@ -210,7 +210,7 @@ class ConfigNodeProps(Generic[CR]):
         # them to cast param values to the right type as we parse a config
         annotations = {name: annotation for name, annotation in
                        get_type_hints(node_cls).items()
-                       if issubclass(annotation, ConfigParam)}
+                       if isinstance(annotation, ConfigParam)}
         return annotations
 
     @get_annotations.instancemethod
@@ -355,7 +355,6 @@ class ConfigNodeProps(Generic[CR]):
                     for ch_key, ch_value in ch_sub:
                         yield (f'{key}.{ch_key}', ch_value)
 
-
     def apply_vars(self: CR) -> Set[str]:
         """Resolve all variables by applying substitutions to its
         parameters or its subnodes'. Raises a RuntimeError in case
@@ -388,6 +387,48 @@ class ConfigNodeProps(Generic[CR]):
                 *args: Sequence[Any],
                 **kwargs: Dict[str, Any]) -> str:
         return yaml.safe_dump(self.to_dict(), *args, **kwargs)
+
+    def validate_subnodes(self: CR, subnodes_to_validate: Sequence[str]):
+        """Check that if specified subnodes are instances of ConfigNode;
+        used during pickling/unpickling and copying to make sure nothing
+        went bad."""
+        for subnode_name in subnodes_to_validate:
+            if subnode_name not in self.node:
+                msg = (f'Something when wrong; key {subnode_name} '
+                       'does not exist in copy')
+                raise RuntimeError(msg)
+
+            subnode = self.node[subnode_name]
+            if not isinstance(subnode, ConfigNode):
+                msg = (f'All subnodes must be instances of {ConfigNode}, '
+                       f'not {type(subnode)}.')
+                from .registry import ConfigRegistry
+                if type(subnode).__name__ in ConfigRegistry:
+                    reg_entry = ConfigRegistry.get(type(subnode).__name__)
+                    msg += f' Hint: you might want to use {type(reg_entry)}.'
+                    raise ValueError(msg)
+
+    def get_names_annotation_override(
+        self: CR,
+        all_flex: bool = False
+    ) -> Dict[str, ConfigParam]:
+        """Returns a list of config locations whose type has been overwritten
+        during merging of configs. Overrides are not bad, but need to be
+        accounted for during initialization"""
+
+        annotations_overrides = {}
+        for param_name, param_spec in self.get_annotations().items():
+            current_param_type = type(getattr(self.node, param_name))
+            if current_param_type != param_spec.type:
+                if issubclass(current_param_type, ConfigNode) and all_flex:
+                    # compromise: all nodes are flexible when pickling
+                    new_param_type = ConfigParam(ConfigFlexNode)
+                else:
+                    new_param_type = ConfigParam(current_param_type)
+                annotations_overrides[param_name] = new_param_type
+
+        return annotations_overrides
+
 
     @hybridmethod
     def update(cls: Type[CR],
@@ -432,13 +473,16 @@ class MetaConfigNode(type):
     exists in both A and B, the version from A is kept.
     `A << B` merges B in to A; it is equivalent to `B >> A`
     """
+
     def __rshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
+        # cls >> other_cls
         merged = type(f'{cls.__name__}_{other_cls.__name__}',
                      (cls, other_cls),
                      {})
         return merged
 
     def __lshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
+        # cls << other_cls
         return other_cls >> cls
 
     def __repr__(cls: Type[CN]):
@@ -757,6 +801,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 f'with params {ConfigNodeProps.get_props(self).to_dict()}>')
 
     def __contains__(self: CN,  key: str) -> bool:
+        # allows to check for nested configs!
         key, *rest = key.split('.')
         rest = '.'.join(rest)
 
@@ -770,6 +815,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
     def __getitem__(self, key: str) -> Any:
         node_props = ConfigNodeProps.get_props(self)
 
+        # allows to check for nested configs!
         key, *rest = key.split('.')
         rest = '.'.join(rest)
 
@@ -798,51 +844,49 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
     def __lshift__(self: CN, other: CN) -> CN:
         return other >> self
 
-    @classmethod
-    def __init_from_tuple__(
-        cls: Type[CN],
-        init_kwargs: Dict[str, Any],
-        all_subnodes: Sequence[str]
-    ) -> CN:
-        obj = cls(**init_kwargs)
-        for subnode_name in all_subnodes:
-            if subnode_name not in obj:
-                msg = (f'Something when wrong; key {subnode_name} '
-                       'does not exist in copy')
-                raise RuntimeError(msg)
-
-            subnode = obj[subnode_name]
-            if not isinstance(subnode, ConfigNode):
-                msg = (f'All subnodes must be instances of {ConfigNode}, '
-                       f'not {type(subnode)}.')
-                from .registry import ConfigRegistry
-                if type(subnode).__name__ in ConfigRegistry:
-                    reg_entry = ConfigRegistry.get(type(subnode).__name__)
-                    msg += f' Hint: you might want to use {type(reg_entry)}.'
-                    raise ValueError(msg)
-
-        return obj
-
-    def __reduce__(self: CN) -> Tuple[Callable, Tuple[Dict[str, Any]]]:
-        LOGGER.debug(f'REDUCE called on {self}')
-
+    def __getstate__(self) -> Dict[str, Any]:
         props = ConfigNodeProps.get_props(self)
+        all_subnodes = [name for name, _ in props.get_children(recursive=True)]
+        ann_override = props.get_names_annotation_override(all_flex=True)
 
-        annotations_override = {
-            param_name: ConfigParam(type(getattr(self, param_name)))
-            for param_name, param_spec in props.get_annotations().items()
-            if param_spec.type != type(getattr(self, param_name))
-        }
+        # TODO: remove this limitation; perhaps keeping a history of what got
+        #       merged with what and re-playing the merges while unpickling.
+        LOGGER.warning('During pickling of config nodes, all nodes get turned '
+                       'into flex nodes. This is a temporary fix to allow for'
+                       'pickling, but it limits the usefulness of type '
+                       'annotations once a class is unpickled.')
 
-        init_kwargs = dict(
+        return dict(config=props.to_dict(),
+                    __flex_node__=isinstance(self, ConfigFlexNode),
+                    __name__=props.short_name,
+                    __annotations_override__=ann_override,
+                    all_subnodes=all_subnodes)
+
+    def __setstate__(self, state: Dict[str, Any]):
+        all_subnodes = state.pop('all_subnodes')
+        self.__init__(**state)
+        ConfigNodeProps.get_props(self).validate_subnodes(all_subnodes)
+
+    def __copy__(self):
+        raise RuntimeError(f'Copying {type(self)} is undefined; '
+                           'please use copy.deepcopy.')
+
+    def __deepcopy__(self: CN, *args) -> Tuple[Callable, Tuple[Dict[str, Any]]]:
+        # this gets called for deep copies and picking
+        LOGGER.debug(f'REDUCE called on {self}')
+        props = ConfigNodeProps.get_props(self)
+        annotations_override = props.get_names_annotation_override()
+
+        node_copy = type(self)(
             config=props.to_dict(),
             __flex_node__=isinstance(self, ConfigFlexNode),
             __name__=props.short_name,
             __annotations_override__=annotations_override
         )
         all_subnodes = [name for name, _ in props.get_children(recursive=True)]
+        ConfigNodeProps.get_props(node_copy).validate_subnodes(all_subnodes)
 
-        return self.__init_from_tuple__, (init_kwargs, all_subnodes)
+        return node_copy
 
 
 @dataclass
