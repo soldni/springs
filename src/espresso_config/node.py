@@ -759,50 +759,54 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # which parameters are still missing, we get a tuple of parameter names
         # initialized so far from the node properties object; then we use it
         # to remove parameter names from the set of all annotations.
-        missing_params = set(annotations).difference(
-            set(node_props.get_params_names())
-        )
+        missing_params = set(annotations).\
+            difference(set(node_props.get_params_names()))
 
         for param_name in missing_params:
-            if param_name not in defaults:
-                if isinstance(annotations[param_name], OptionalConfigParam):
-                    msg = (f'[PHASE 2][CLS {type(self).__name__}] '
-                           f'Skipping {param_name} because it is '
-                           f'annotated as {OptionalConfigParam.__name__}')
-                    LOGGER.debug(msg)
-                else:
-                    # This parameter was not overwritten by the configuration
-                    # provided to this __init__ method; however, the paramer
-                    # doesn't have a default, so we need to raise an error.
-                    msg = (f'parameter "{param_name}" is '
-                           f'missing for "{node_props.cls_name}"')
-                    raise ValueError(msg)
+            # we eval a couple of conditions here on whether we can use
+            # this parameter or not
+            is_missing_default = param_name not in defaults
+            is_optional_default = \
+                isinstance(annotations[param_name], OptionalConfigParam)
 
-            # We got lucky! We found a default value for this annotated
-            # parameter!
+            if is_missing_default and is_optional_default:
+                msg = (f'[PHASE 2][CLS {type(self).__name__}] '
+                        f'Skipping {param_name} because it is '
+                        f'annotated as {OptionalConfigParam.__name__}')
+                LOGGER.debug(msg)
+            elif is_missing_default:
+                # This parameter was not overwritten by the configuration
+                # provided to this __init__ method; however, the paramer
+                # doesn't have a default, so we need to raise an error.
+                msg = (f'parameter "{param_name}" is '
+                       f'missing for "{node_props.cls_name}"')
+                raise ValueError(msg)
+            else:
+                # We got lucky! We found a default value for this annotated
+                # parameter!
 
-            # We first make a copy of the parameter value; we don't want
-            # a user to accidentally override a class by modifying an
-            # attribute of a config instance!
-            param_value = copy.deepcopy(defaults[param_name])
+                # We first make a copy of the parameter value; we don't want
+                # a user to accidentally override a class by modifying an
+                # attribute of a config instance!
+                param_value = copy.deepcopy(defaults[param_name])
 
-            # Like before, we check if this is a placeholder var; if
-            # it is, we need to instantitate it and use it as parameter
-            # value so it can be resolved later. We also add it to the
-            # registry of all the placeholder variables, which is
-            # in the node properties.
-            if ConfigPlaceholderVar.contains(param_value):
-                param_value = ConfigPlaceholderVar(
-                    parent_node=self,
-                    param_name=param_name,
-                    param_value=param_value,
-                    param_config=annotations[param_name]
-                )
-                node_props.add_var(param_value)
+                # Like before, we check if this is a placeholder var; if
+                # it is, we need to instantitate it and use it as parameter
+                # value so it can be resolved later. We also add it to the
+                # registry of all the placeholder variables, which is
+                # in the node properties.
+                if ConfigPlaceholderVar.contains(param_value):
+                    param_value = ConfigPlaceholderVar(
+                        parent_node=self,
+                        param_name=param_name,
+                        param_value=param_value,
+                        param_config=annotations[param_name]
+                    )
+                    node_props.add_var(param_value)
 
-            # add parameter to set of parameters in this node and
-            # assign its DEFAULT VALUE
-            node_props.assign_param(name=param_name, value=param_value)
+                # add parameter to set of parameters in this node and
+                # assign its DEFAULT VALUE
+                node_props.assign_param(name=param_name, value=param_value)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
