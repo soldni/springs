@@ -2,7 +2,8 @@ from .node import (
     ConfigNode,
     ConfigFlexNode,
     ConfigParam,
-    DictOfConfigNodes
+    DictOfConfigNodes,
+    OptionalConfigParam
 )
 from .registry import ConfigRegistry
 from .functional import (

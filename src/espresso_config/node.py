@@ -95,6 +95,10 @@ class ConfigParam(Generic[CP]):
         return f'{type(self).__name__}({str(type_)})'
 
 
+class OptionalConfigParam(ConfigParam):
+    ...
+
+
 class ConfigRegistryReference(Generic[CE]):
     """Extract registry references and resolve them"""
     def __init__(
@@ -576,8 +580,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             # check if it is a valid parameter, if not, raise a KeyError
             if ((param_name not in annotations) and
                 (param_name not in subnodes) and
-                not(__flex_node__) and
-                registry_reference is None):
+                not(__flex_node__)):
                 debug_call('0.not_supported')
                 # CASE 0: we can't add this key to this config; raise an error.
                 msg = (f'Parameter "{param_name}" not '
@@ -737,7 +740,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 #         mode so I'll just add it to this node object
                 #         (config_value is already asssigned, that's why we
                 #         just pass here).
-                debug_call('5.unrecognized')
+                debug_call('5.unrecognized_but_flexible')
             else:
                 # CASE ∞: Something went wrong and you reached a technically
                 #         unreachable branch! Someone will have to investigate.
@@ -762,16 +765,22 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
 
         for param_name in missing_params:
             if param_name not in defaults:
-                # This parameter was not overwritten by the configuration
-                # provided to this __init__ method; however, the paramer
-                # doesn't have a default, so we need to raise an error.
-                msg = (f'parameter "{param_name}" is '
-                       f'missing for "{node_props.cls_name}"')
-                raise ValueError(msg)
+                if isinstance(annotations[param_name], OptionalConfigParam):
+                    msg = (f'[PHASE 2][CLS {type(self).__name__}] '
+                           f'Skipping {param_name} because it is '
+                           f'annotated as {OptionalConfigParam.__name__}')
+                    LOGGER.debug(msg)
+                else:
+                    # This parameter was not overwritten by the configuration
+                    # provided to this __init__ method; however, the paramer
+                    # doesn't have a default, so we need to raise an error.
+                    msg = (f'parameter "{param_name}" is '
+                           f'missing for "{node_props.cls_name}"')
+                    raise ValueError(msg)
 
             # We got lucky! We found a default value for this annotated
             # parameter!
-            #
+
             # We first make a copy of the parameter value; we don't want
             # a user to accidentally override a class by modifying an
             # attribute of a config instance!
