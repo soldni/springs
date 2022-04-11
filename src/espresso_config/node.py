@@ -428,7 +428,20 @@ class ConfigNodeProps(Generic[CR]):
 
         annotations_overrides = {}
         for param_name, param_spec in self.get_annotations().items():
-            current_param_type = type(getattr(self.node, param_name))
+            param_value = getattr(self.node, param_name, MISSING)
+
+            if param_value == MISSING:
+                if isinstance(param_spec, OptionalConfigParam):
+                # this is an optional parameter that was not provided
+                    continue
+                else:
+                    msg = (f'I could not find required parameter {param_name} '
+                           f'in {self.node}; this is not expected, please '
+                           f'report this error.')
+                    raise ValueError(msg)
+
+            current_param_type = type(param_value)
+
             if current_param_type != param_spec.type:
                 if issubclass(current_param_type, ConfigNode) and all_flex:
                     # compromise: all nodes are flexible when pickling
