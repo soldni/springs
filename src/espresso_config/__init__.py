@@ -2,7 +2,6 @@ from .node import (
     ConfigNode,
     ConfigFlexNode,
     ConfigParam,
-    DictOfConfigNodes,
     OptionalConfigParam
 )
 from .registry import ConfigRegistry
@@ -16,3 +15,7 @@ from . import builtin_refs as _builtin_refs
 from .instantiate import instantiate
 from .logging import configure_logging
 from .commandline import cli
+from .experimental import (
+    ConfigParamDictOfConfigNodes,
+    ConfigParamMultiType
+)

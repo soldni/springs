@@ -1,4 +1,4 @@
-import copy
+from copy import deepcopy
 import functools
 import json
 import logging
@@ -62,26 +62,6 @@ class ParameterSpec(NamedTuple):
         return outdict
 
 
-# class MetaConfigParam(type):
-#     def __repr__(cls):
-#         type_ = getattr(cls, 'type', None)
-#         return f'{type(cls).__name__}({repr(type_)})'
-
-#     def __str__(cls):
-#         type_ = getattr(cls, 'type', None)
-#         return f'{type(cls).__name__}({str(type_)})'
-
-
-# class ConfigParam(Generic[CP], metaclass=MetaConfigParam):
-#     """Type wrapper to indicate parameters in a config node."""
-#     type: T
-
-#     def __new__(cls: Type[CP], target_type: T) -> T:
-#         class ConfigTypedParam(cls):
-#             type = target_type
-#         return ConfigTypedParam
-
-
 class ConfigParam(Generic[CP]):
     def __init__(self, target_type):
         self.type = target_type
@@ -120,6 +100,8 @@ class ConfigRegistryReference(Generic[CE]):
 
     @classmethod
     def from_str(cls: Type[CE], string: str) -> CE:
+        """Extract name and parameters of the reference from a string"""
+
         args = string.split(CONFIG_NODE_REGISTRY_SEPARATOR)
         if len(args) == 1:
             # no reference
@@ -130,16 +112,17 @@ class ConfigRegistryReference(Generic[CE]):
                        registry_ref=registry_ref,
                        registry_args=args)
 
-    def resolve_later(self: CE, **kwargs) -> CE:
-        self.resolve = functools.partial(self.resolve, **kwargs)
-        return self
+    def resolve_later(self: CE, *args, **kwargs) -> CE:
+        copy = deepcopy(self)
+        copy.resolve = functools.partial(copy.resolve, *args, **kwargs)
+        return copy
 
     def resolve(self: CE,
                 *args,
-                nodes_cls: Sequence[CN] = None,
+                node_cls: Sequence[CN] = None,
                 **kwargs) -> Any:
         """Resolves and instantiates a reference to a registry object using
-        `param_value`. `nodes_cls` can be a list of ConfigNode objects to
+        `param_value`. `node_cls` can be a list of ConfigNode objects to
         merge with no override to the registry reference (if the registry
         reference is itself a ConfigNode). `kwargs`, as well as `self.args`
         are passed to the registry reference constructor."""
@@ -148,26 +131,19 @@ class ConfigRegistryReference(Generic[CE]):
             # no-op if there is no registry ref!
             return args[0] if len(args) == 1 else args
 
-        nodes_cls = nodes_cls or []
-
         from .registry import ConfigRegistry
         registry_reference = ConfigRegistry.get(self.registry_ref)
 
-        for node_cls in nodes_cls:
-
+        if node_cls:
             if isclass(node_cls) and not issubclass(node_cls, ConfigNode):
                 msg = ('The registry reference resolver has receive an object'
-                       f'of type {node_cls}, which is not a ConfigNode')
+                        f'of type {node_cls}, which is not a ConfigNode')
                 raise ValueError(msg)
 
-            if (isclass(registry_reference) and
-                not issubclass(registry_reference, ConfigNode)):
-                msg = ('The registry reference resolver has received one or '
-                       'more ConfigNode, but they cannot be merged with a '
-                       f'registry reference of type {type(registry_reference)}')
-                raise ValueError(msg)
-
-            registry_reference = registry_reference >> node_cls
+            # getting annotations and subnode for this ConfigNode class,
+            # and prepare to pass them to the registry reference constructor
+            # as kwargs.
+            kwargs.update(ConfigNodeProps.get_defaults(node_cls))
 
         return registry_reference(*args, *self.registry_args, **kwargs)
 
@@ -208,14 +184,17 @@ class ConfigNodeProps(Generic[CR]):
     def set_name(self: CR, node_name: Union[str, None]):
             # set the full path to this node as its name
         self.short_name = self.cls_name if node_name is None else node_name
-        self.long_name = (
-            self.short_name if self.is_root() else
-            f'{self.get_props(self.parent).long_name}.{self.short_name}'
-        )
+        if self.is_root():
+            self.long_name = self.short_name
+        else:
+            parent_props = self.get_props(self.parent)
+            self.long_name = f'{parent_props.long_name}.{self.short_name}'
 
     @hybridmethod
-    def get_annotations(cls: Type[CR],
-                        node_cls: Type[CN]) -> Dict[str, ConfigParam]:
+    def get_annotations(
+        cls: Type[CR],
+        node_cls: Type[CN]
+    ) -> Dict[str, ConfigParam]:
         # these are all annotations for parameters for this node; we use
         # them to cast param values to the right type as we parse a config
         annotations = {name: annotation for name, annotation in
@@ -273,9 +252,11 @@ class ConfigNodeProps(Generic[CR]):
     def get_all_cls_members(cls: Type[CR],
                             node_cls: Type[CN]) -> Dict[str, Any]:
         all_non_routines = getmembers(node_cls, lambda a: not(isroutine(a)))
-        return {name: value for name, value in all_non_routines
-                if not((name.startswith('__') and name.endswith('__')) or
-                        name == '_is_protocol')}
+        invalid_name_fn = lambda n: ((n.startswith('__') and n.endswith('__'))
+                                     or n == '_is_protocol')
+        members = {name: value for name, value in all_non_routines
+                   if not invalid_name_fn(name)}
+        return members
 
     @get_all_cls_members.instancemethod
     def get_all_cls_members(self: CR) -> Dict[str, Any]:
@@ -418,46 +399,11 @@ class ConfigNodeProps(Generic[CR]):
                     msg += f' Hint: you might want to use {type(reg_entry)}.'
                     raise ValueError(msg)
 
-    def get_names_annotation_override(
-        self: CR,
-        all_flex: bool = False
-    ) -> Dict[str, ConfigParam]:
-        """Returns a list of config locations whose type has been overwritten
-        during merging of configs. Overrides are not bad, but need to be
-        accounted for during initialization"""
-
-        annotations_overrides = {}
-        for param_name, param_spec in self.get_annotations().items():
-            param_value = getattr(self.node, param_name, MISSING)
-
-            if param_value == MISSING:
-                if isinstance(param_spec, OptionalConfigParam):
-                # this is an optional parameter that was not provided
-                    continue
-                else:
-                    msg = (f'I could not find required parameter {param_name} '
-                           f'in {self.node}; this is not expected, please '
-                           f'report this error.')
-                    raise ValueError(msg)
-
-            current_param_type = type(param_value)
-
-            if current_param_type != param_spec.type:
-                if issubclass(current_param_type, ConfigNode) and all_flex:
-                    # compromise: all nodes are flexible when pickling
-                    new_param_type = ConfigParam(ConfigFlexNode)
-                else:
-                    new_param_type = ConfigParam(current_param_type)
-                annotations_overrides[param_name] = new_param_type
-
-        return annotations_overrides
-
-
     @hybridmethod
-    def update(cls: Type[CR],
+    def merge_nodes(cls: Type[CR],
                node: CN,
                other_node: CN,
-               flex: bool = False) -> Dict[str, Any]:
+               flex: bool = False) -> CN:
         """Create a new node node where values form `node`
         are updated with values from `other_node`."""
 
@@ -470,52 +416,23 @@ class ConfigNodeProps(Generic[CR]):
         props = cls.get_props(node)
         other_props = cls.get_props(other_node)
 
-        node_cls = ((props.node_cls << other_props.node_cls)
-                    if flex else props.node_cls)
+        node_cls = ConfigFlexNode if flex else props.node_cls
 
         config_values = props.to_dict()
         config_values.update(other_props.to_dict())
 
         return node_cls(config_values, __flex_node__=flex)
 
-    @update.instancemethod
-    def update(self: CR,
-               other_node: CN,
-               flex: bool = False) -> Dict[str, Any]:
-        return type(self).update(node=self.node,
-                                 other_node=other_node,
-                                 flex=flex)
+    @merge_nodes.instancemethod
+    def merge_nodes(self: CR,
+                    other_node: CN,
+                    flex: bool = False) -> CN:
+        return type(self).merge_nodes(node=self.node,
+                                      other_node=other_node,
+                                      flex=flex)
 
 
-class MetaConfigNode(type):
-    """A very simple metaclass for the config node that
-    implements operators `>>` and `<<` between subclasses
-    of ConfigNode.
-
-    `A >> B` merges A into B, meaning that, if a parameter
-    exists in both A and B, the version from A is kept.
-    `A << B` merges B in to A; it is equivalent to `B >> A`
-    """
-
-    def __rshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
-        # cls >> other_cls
-        merged = type(f'{cls.__name__}_{other_cls.__name__}',
-                     (cls, other_cls),
-                     {})
-        return merged
-
-    def __lshift__(cls: Type[CN], other_cls: Type[CN]) -> Type[CN]:
-        # cls << other_cls
-        return other_cls >> cls
-
-    def __repr__(cls: Type[CN]):
-        attributes = ConfigNodeProps.get_all_cls_members(cls)
-        attributes_repr = ', '.join(f'{name}={repr(value)}'
-                                    for name, value in attributes.items())
-        return f'{cls.__name__}({attributes_repr})'
-
-
-class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
+class ConfigNode(Generic[CN]):
     """A generic configuration node."""
 
     def __init__(
@@ -524,8 +441,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         __parent__ : CN = None,
         __flex_node__: bool = False,
         __name__: str = None,
-        __annotations_override__: Optional[Dict[str, Type[CP]]] = None,
-        ) -> None:
+        **kwargs: Dict[str, Any],
+    ) -> None:
         # Parsing comes in 5 phases, each one is in a separate code block!
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 0 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -536,7 +453,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                      f' config: {config}\n'
                      f'__parent__: {__parent__}\n'
                      f'__flex_node__: {__flex_node__}\n'
-                     f'__name__: {__name__}\n')
+                     f'__name__: {__name__}\n'
+                     f'**kwargs: {kwargs}\n')
 
         # Create a property object for this node; the object will bind
         # itself to it
@@ -547,8 +465,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         # get annnotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
         # subnode to this config node.
-        annotations = {**node_props.get_annotations(),
-                       **(__annotations_override__ or {})}
+        annotations = node_props.get_annotations()
         defaults = node_props.get_defaults()
         subnodes = node_props.get_subnodes()
 
@@ -571,6 +488,10 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             msg = (f'Config to `{node_props.cls_name}` should be dict, '
                    f'but received {type(config)} instead!')
             raise ValueError(msg)
+
+        # any extra keyword argument is used to complement the config
+        # NOTE: kwargs never overwrite the config! it's the other way around.
+        config = {**(kwargs or {}), **config}
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -611,23 +532,23 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 # reference with nodes (see explanation below). We keep
                 # them in this list before passing them
                 # registry_reference.resolve
-                nodes_cls_to_merge = []
                 if param_name in subnodes:
                     # CASE 1.S1.1: beside the key with just loaded, we also
                     #              have a subnode with potentially some
                     #              default parameters! fear not, we
                     #              merge configs using operator `>>`
                     debug_call('1.S1.1.registry+submodule')
-                    nodes_cls_to_merge.append(subnodes[param_name])
-
-                if (param_name in annotations and
+                    node_cls_to_merge = subnodes[param_name]
+                elif (param_name in annotations and
                     issubclass(annotations[param_name].type, ConfigNode)):
                     # CASE 1.S1.2: we also need to merge with the type we also
                     #              get from the parameter annotation. This is
                     #              usually empty, but we merge with it for
                     #              good measure too.
                     debug_call('1.S1.2.registry+annotation')
-                    nodes_cls_to_merge.append(annotations[param_name].type)
+                    node_cls_to_merge = annotations[param_name].type
+                else:
+                    node_cls_to_merge = None
 
                 # Finally after a bunch of merging (maybe?), we can instantiate
                 # an object using the registry reference!
@@ -642,7 +563,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     # which allows us to pass some parameters to the
                     # resolve method reference without actually running it.
                     registry_reference = registry_reference.resolve_later(
-                        nodes_cls=nodes_cls_to_merge,
+                        node_cls=node_cls_to_merge,
                         __parent__=self,
                         __name__=param_name
                     )
@@ -665,7 +586,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     debug_call('1.S2.2.registry+novar')
                     param_value = registry_reference.resolve(
                         param_value,
-                        nodes_cls=nodes_cls_to_merge,
+                        node_cls=node_cls_to_merge,
                         __parent__=self,
                         __name__=param_name
                     )
@@ -690,8 +611,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 # parameter is, so we first extract the type.
                 param_type = annotations[param_name].type
 
-                if (isclass(param_type) and
-                    issubclass(param_type, ConfigNode)):
+                if (isclass(param_type) and issubclass(param_type, ConfigNode)):
                     # CASE 3.1: sometimes the type of a paramemter is
                     #           ConfigNode or a subclass of it, making
                     #           necessary to pass some extra parameters to
@@ -703,10 +623,12 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     # if the parameter provided is a dict or a ConfigNode,
                     # because those can be parsed by a config node.
                     if isinstance(param_value, (dict, ConfigNode)):
+                        debug_call('3.1.1.ann_subnode/is_config')
                         param_type = functools.partial(
                             param_type, __parent__=self, __name__=param_name
                         )
                     else:
+                        debug_call('3.1.2.ann_subnode/skip_cast')
                         param_type = lambda x: x
                 elif isinstance(param_value, param_type):
                     # We cast to param_type, but only if we absolutely
@@ -722,7 +644,11 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                     # to the constructor itself due to this casting. checking
                     # if the object is already of the expected type should
                     # fix this).
+                    debug_call('3.2.ann_skip_casting')
                     param_type = lambda x: x
+                else:
+                    # this is the case where we cast
+                    debug_call('3.3.ann_do_cast')
 
                 # cast (or not!) here
                 param_value = param_type(param_value)
@@ -779,8 +705,8 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
             # we eval a couple of conditions here on whether we can use
             # this parameter or not
             is_missing_default = param_name not in defaults
-            is_optional_default = \
-                isinstance(annotations[param_name], OptionalConfigParam)
+            is_optional_default = isinstance(annotations[param_name],
+                                             OptionalConfigParam)
 
             if is_missing_default and is_optional_default:
                 msg = (f'[PHASE 2][CLS {type(self).__name__}] '
@@ -801,7 +727,7 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
                 # We first make a copy of the parameter value; we don't want
                 # a user to accidentally override a class by modifying an
                 # attribute of a config instance!
-                param_value = copy.deepcopy(defaults[param_name])
+                param_value = deepcopy(defaults[param_name])
 
                 # Like before, we check if this is a placeholder var; if
                 # it is, we need to instantitate it and use it as parameter
@@ -903,54 +829,12 @@ class ConfigNode(Generic[CN], metaclass=MetaConfigNode):
         return sum(1 for _ in self)
 
     def __rshift__(self: CN, other: CN) -> CN:
-        return ConfigNodeProps.get_props(other).update(self)
+        # other >> self
+        return ConfigNodeProps.get_props(other).merge_nodes(self)
 
     def __lshift__(self: CN, other: CN) -> CN:
+        # other << self
         return other >> self
-
-    def __getstate__(self) -> Dict[str, Any]:
-        props = ConfigNodeProps.get_props(self)
-        all_subnodes = [name for name, _ in props.get_children(recursive=True)]
-        ann_override = props.get_names_annotation_override(all_flex=True)
-
-        # TODO: remove this limitation; perhaps keeping a history of what got
-        #       merged with what and re-playing the merges while unpickling.
-        LOGGER.warning('During pickling of config nodes, all nodes get turned '
-                       'into flex nodes. This is a temporary fix to allow for'
-                       'pickling, but it limits the usefulness of type '
-                       'annotations once a class is unpickled.')
-
-        return dict(config=props.to_dict(),
-                    __flex_node__=isinstance(self, ConfigFlexNode),
-                    __name__=props.short_name,
-                    __annotations_override__=ann_override,
-                    all_subnodes=all_subnodes)
-
-    def __setstate__(self, state: Dict[str, Any]):
-        all_subnodes = state.pop('all_subnodes')
-        self.__init__(**state)
-        ConfigNodeProps.get_props(self).validate_subnodes(all_subnodes)
-
-    def __copy__(self):
-        raise RuntimeError(f'Copying {type(self)} is undefined; '
-                           'please use copy.deepcopy.')
-
-    def __deepcopy__(self: CN, *args) -> Tuple[Callable, Tuple[Dict[str, Any]]]:
-        # this gets called for deep copies and picking
-        LOGGER.debug(f'REDUCE called on {self}')
-        props = ConfigNodeProps.get_props(self)
-        annotations_override = props.get_names_annotation_override()
-
-        node_copy = type(self)(
-            config=props.to_dict(),
-            __flex_node__=isinstance(self, ConfigFlexNode),
-            __name__=props.short_name,
-            __annotations_override__=annotations_override
-        )
-        all_subnodes = [name for name, _ in props.get_children(recursive=True)]
-        ConfigNodeProps.get_props(node_copy).validate_subnodes(all_subnodes)
-
-        return node_copy
 
 
 @dataclass
@@ -1063,7 +947,7 @@ class ConfigPlaceholderVar(Generic[CV]):
                 )
 
             # we make a copy of the object to avoid unwanted side effects
-            placeholder_substitution = copy.deepcopy(placeholder_substitution)
+            placeholder_substitution = deepcopy(placeholder_substitution)
 
             if var_match.registry.registry_ref:
                 # the user has asked for registry reference call, so
@@ -1130,51 +1014,3 @@ class ConfigFlexNode(ConfigNode):
                  __flex_node__: bool = True,
                  **kwargs: Dict[str, Any]) -> None:
         super().__init__(*args, __flex_node__=True, **kwargs)
-
-
-class DictOfConfigNodes:
-    """A special type of node that contains a dictionary of ConfigNodes.
-    Useful for when you want to provide a bunch of nodes, but you are
-    not sure what the name of keys are. Usage:
-
-    ```python
-    from espresso_config import (
-        NodeConfig, DictOfConfigNodes, ConfigParam
-    )
-
-    class ConfigA(NodeConfig):
-        p: ConfigParam(int)
-
-    class RootConfig(NodeConfig):
-        dict_of_configs: ConfigParam(DictOfConfigNodes(ConfigA)) = {}
-
-    ```
-
-    and in the corresponding yaml file:
-
-    ```yaml
-    dict_of_configs:
-        first_config:
-            p: 1
-        second_config:
-            p: 2
-        ...
-    ```
-    """
-
-    class _Wrapper:
-
-        def __new__(cls, config=None, *args, **kwargs):
-            parsed = {}
-
-            for k, v in (config or {}).items():
-                node = super().__new__(cls)
-                node.__init__(v, *args, **kwargs)
-                parsed[k] = node
-
-            flex_node_wrapper_cls = type(cls.__name__, (ConfigFlexNode, ), {})
-            return flex_node_wrapper_cls(parsed, *args, **kwargs)
-
-    def __new__(cls, node_cls: ConfigFlexNode) -> ConfigFlexNode:
-        return type(f'DictOf{node_cls.__name__}',
-                    (cls._Wrapper, node_cls), {})

@@ -7,8 +7,7 @@ from typing import Any, Callable, Dict, Sequence, Type, TypeVar, Union
 
 from .exceptions import ConfigInstantiateError
 from .utils import clean_multiline
-from .functional import config_from_dict
-from .node import ConfigNode, ConfigNodeProps, Generic
+from .node import ConfigNode, ConfigNodeProps, Generic, ConfigFlexNode
 
 IT = TypeVar('IT', bound='InitLater')
 GC = TypeVar('GC', bound='get_callable')
@@ -110,7 +109,7 @@ class instantiate:
         if config is None:
             return InitLater.no_op()
 
-        config_node = (config_from_dict(config, flex=True)
+        config_node = (ConfigFlexNode(config)
                        if isinstance(config, dict) else
                        copy.deepcopy(config))
 

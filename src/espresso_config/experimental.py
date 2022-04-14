@@ -1,16 +1,21 @@
+from .node import ConfigNode, ConfigFlexNode
+from typing import Dict, Type, Any
+from inspect import isclass
+from functools import partial
 import inspect
 from typing import Any, Sequence, Tuple, Type, Union
 
 from .node import ConfigNode, ConfigParam
 
 
-class MultiTypeMeta(type):
+class _MultiTypeMeta(type):
     types: Tuple[Type]
 
     def __subclasscheck__(cls, __subclass: type) -> bool:
         return issubclass(__subclass, cls.types)
 
-class MultiType(metaclass=MultiTypeMeta):
+
+class _MultiType(metaclass=_MultiTypeMeta):
     types = Tuple[Type]
 
     def __str__(self):
@@ -63,7 +68,63 @@ class ConfigParamMultiType(ConfigParam):
 
     @property
     def type(self):
+        # because the dynamic class doesn't get pickled, we
+        # are good to go here!
         target_type_repr = ', '.join(t.__name__ for t in self._types)
         return type(f'MultiType({target_type_repr})',
-                    (MultiType, ),
+                    (_MultiType, ),
                     {'types': self._types})
+
+
+class _DictOfConfigNodes(ConfigFlexNode):
+    node_cls: Type[ConfigNode]
+
+    def __new__(cls,
+                config: Dict[str, dict],
+                *args,
+                **kwargs):
+        config_params = {node_name: cls.node_cls(node_config, *args, **kwargs)
+                         for node_name, node_config in config.items()}
+        return ConfigFlexNode(config_params, *args, **kwargs)
+
+
+class ConfigParamDictOfConfigNodes(ConfigParam):
+    """A special parameter that contains a dictionary of ConfigNodes.
+    Useful for when you want to provide a bunch of nodes, but you are
+    not sure what the name of keys are. Usage:
+
+    ```python
+    from espresso_config import (
+        NodeConfig, DictOfConfigNodes, ConfigParam
+    )
+
+    class ConfigA(NodeConfig):
+        p: ConfigParam(int)
+
+    class RootConfig(NodeConfig):
+        dict_of_configs: ConfigParamDictOfConfigNodes(ConfigA) = {}
+
+    ```
+
+    and in the corresponding yaml file:
+
+    ```yaml
+    dict_of_configs:
+        first_config:
+            p: 1
+        second_config:
+            p: 2
+        ...
+    ```
+    """
+
+    def __init__(self, node_cls: Type[ConfigNode]):
+        self.node_cls = node_cls
+
+    @property
+    def type(self):
+        # because the dynamic class doesn't get pickled, we
+        # are good to go here!
+        return type(f'DictOfConfigNodes({self.node_cls.__name__})',
+                    (_DictOfConfigNodes, ),
+                    {'node_cls': self.node_cls})
