@@ -197,6 +197,9 @@ class _MissingMetaClass(type):
     def __repr__(cls) -> str:
         return f'{cls.__name__}({str(cls)})'
 
+    def __bool__(cls) -> bool:
+        return False
+
 
 class MISSING(metaclass=_MissingMetaClass):
     """Used to keep track of missing parameters"""

@@ -132,7 +132,7 @@ class ConfigRegistryReference(Generic[CE]):
             return args[0] if len(args) == 1 else args
 
         from .registry import ConfigRegistry
-        registry_reference = ConfigRegistry.get(self.registry_ref)
+        registry_ref = ConfigRegistry.get(self.registry_ref)
 
         if node_cls:
             if isclass(node_cls) and not issubclass(node_cls, ConfigNode):
@@ -140,12 +140,24 @@ class ConfigRegistryReference(Generic[CE]):
                         f'of type {node_cls}, which is not a ConfigNode')
                 raise ValueError(msg)
 
-            # getting annotations and subnode for this ConfigNode class,
-            # and prepare to pass them to the registry reference constructor
-            # as kwargs.
-            kwargs.update(ConfigNodeProps.get_defaults(node_cls))
+            # we operate slightly differently depending if the registry
+            # reference is a config node or not.
+            # 1. If yes, we provide defaults from node_cls to potential
+            #    make up for some missing parameters in the configuration
+            #    passed to this node.
+            # 2. If not, it's more free-reign; in fact, we provide
+            #    node_cls itself to the registry reference in case
+            #    it might be useful.
 
-        return registry_reference(*args, *self.registry_args, **kwargs)
+            if isclass(registry_ref) and issubclass(registry_ref, ConfigNode):
+                # getting annotations and subnode for this ConfigNode class,
+                # and prepare to pass them to the registry reference
+                # constructor as kwargs.
+                kwargs.update(ConfigNodeProps.get_defaults(node_cls))
+            else:
+                kwargs['node_cls'] = node_cls
+
+        return registry_ref(*args, *self.registry_args, **kwargs)
 
     @classmethod
     def contains(cls, string: str) -> bool:

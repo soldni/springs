@@ -1,10 +1,10 @@
 from distutils.debug import DEBUG
 from enum import Enum
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import Any, Callable, Dict, Generic, Optional, Sequence, Type, TypeVar
+from typing import Any, Callable, Dict, Generic, Optional, Sequence, Type, TypeVar, Union
 
 import yaml
 
@@ -12,7 +12,7 @@ from .functional import config_to_yaml
 from .instantiate import InitLater
 from .node import ConfigNode, ConfigNodeProps, ParameterSpec
 from .utils import (PrintUtils, merge_nested_dicts,
-                    read_raw_file, resolve_path)
+                    read_raw_file, resolve_path, MISSING)
 
 
 PS = TypeVar("PS", bound="PrintingSteps")
@@ -33,9 +33,22 @@ def make_flags(opt_name: CliFlags) -> Sequence[str]:
 
 
 class PrintingSteps(Generic[PS]):
-    def __init__(self: PS,
-                 cli_flags: Dict[str, bool] = None):
-        cli_flags = cli_flags or {CliFlags.PARSED: True, CliFlags.STOP: False}
+    def __init__(self: PS, ns: Union[Namespace, dict]):
+
+        # turn the namespace to a dictionary
+        ns = vars(ns) if isinstance(ns, Namespace) else ns
+
+        # ignoring whatever is of type missing, i.e. was not provided
+        # as well as the configuration path
+        cli_flags = {k: v for k, v in ns.items()
+                     if (v != MISSING and k != CliFlags.CONFIG.value)}
+
+        # default if none are provided
+        cli_flags = (cli_flags or {CliFlags.PARSED: True,
+                                   CliFlags.STOP: False,
+                                   CliFlags.DEBUG: False})
+
+        # convert to Enum entries
         self.steps = {CliFlags(stp) for stp, flg in cli_flags.items() if flg}
 
     def do_step(self: PS, step_name: CliFlags) -> bool:
@@ -45,10 +58,10 @@ class PrintingSteps(Generic[PS]):
         return False
 
     def has_more_steps(self: PS) -> bool:
-        return len(self.steps) == 0
+        return self.steps != {CliFlags.STOP}
 
     def will_print(self: PS) -> bool:
-        return sum(1 for s in self.steps if s != CliFlags.DEBUG) > 0
+        return self.steps and self.has_more_steps()
 
 
 class cli(Generic[CLI]):
@@ -109,26 +122,31 @@ class cli(Generic[CLI]):
         msg = 'Print all default options and CLI flags.'
         ap.add_argument(*make_flags(CliFlags.OPTIONS),
                         action='store_true',
+                        default=MISSING,
                         help=msg)
 
         msg = 'Print the input configuration.'
         ap.add_argument(*make_flags(CliFlags.INPUTS),
                         action='store_true',
+                        default=MISSING,
                         help=msg)
 
         msg = 'Print the parsed configuration.'
         ap.add_argument(*make_flags(CliFlags.PARSED),
                         action='store_true',
+                        default=MISSING,
                         help=msg)
 
         msg = 'Enter debug mode by setting global logging to DEBUG.'
         ap.add_argument(*make_flags(CliFlags.DEBUG),
                         action='store_true',
+                        default=MISSING,
                         help=msg)
 
         msg = 'If provided, it stops running before running the script.'
         ap.add_argument(*make_flags(CliFlags.STOP),
                         action='store_true',
+                        default=MISSING,
                         help=msg)
 
         return ap
@@ -151,7 +169,7 @@ class cli(Generic[CLI]):
         opts, _args = ap.parse_known_args()
 
         # set some default options for when no options are provided
-        printing_steps = PrintingSteps(vars(opts))
+        printing_steps = PrintingSteps(opts)
 
         # setup debug
         if opts.debug:
@@ -191,7 +209,7 @@ class cli(Generic[CLI]):
             pu.print('INPUT/COMMAND LINE:', cli_config)
             pu.print('INPUT/CONFIG FILE:', file_config)
 
-        if printing_steps.has_more_steps():
+        if not printing_steps.has_more_steps():
             # nothing more to do, let's not risk
             # parsing, which might cause an error!
            return InitLater.no_op()
@@ -209,7 +227,6 @@ class cli(Generic[CLI]):
 
         # we execute the main method
         return func(parsed_config, **kwargs)
-
 
 
     def __new__(cls,

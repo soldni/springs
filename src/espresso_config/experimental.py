@@ -1,11 +1,11 @@
-from .node import ConfigNode, ConfigFlexNode
-from typing import Dict, Type, Any
-from inspect import isclass
-from functools import partial
 import inspect
-from typing import Any, Sequence, Tuple, Type, Union
+from typing import Any, Sequence, Tuple, Type, Dict
 
-from .node import ConfigNode, ConfigParam
+from .node import (
+    ConfigNode,
+    ConfigFlexNode,
+    ConfigParam,
+)
 
 
 class _MultiTypeMeta(type):
