@@ -27,5 +27,8 @@ cd "${SCRIPT_DIR}/.."
 python3 -m build
 python3 -m twine upload dist/*
 
+# no need to keep all previous builds
+rm -rf dist/*
+
 # go back to original dir
 cd ${CURRENT_DIR}
