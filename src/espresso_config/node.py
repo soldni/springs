@@ -11,7 +11,7 @@ from typing import (
 )
 
 import yaml
-
+from .exceptions import PlaceholderVariableError
 from .utils import MISSING, hybridmethod
 
 
@@ -916,9 +916,13 @@ class ConfigPlaceholderVar(Generic[CV]):
                 # this reduce function traverses the config from the
                 # root node to get to the variable that we want
                 # to use for substitution
-                placeholder_substitution = functools.reduce(
-                    lambda node, key: node[key], var_match.path, root_node
-                )
+                try:
+                    placeholder_substitution = functools.reduce(
+                        lambda node, key: node[key], var_match.path, root_node
+                    )
+                except Exception as e:
+                    msg = f'Could not resolve ${{{".".join(var_match.path)}}}'
+                    raise PlaceholderVariableError(msg) from e
             else:
                 # this is a registry reference with no placeholder
                 # variable; we set the placeholder substitution to None

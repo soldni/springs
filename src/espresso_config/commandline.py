@@ -1,15 +1,17 @@
+from distutils.debug import DEBUG
+from enum import Enum
 import os
 from argparse import ArgumentParser
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import Any, Callable, Generic, Optional, Sequence, Type, TypeVar
+from typing import Any, Callable, Dict, Generic, Optional, Sequence, Type, TypeVar
 
 import yaml
 
 from .functional import config_to_yaml
 from .instantiate import InitLater
 from .node import ConfigNode, ConfigNodeProps, ParameterSpec
-from .utils import (MultiValueEnum, PrintUtils, merge_nested_dicts,
+from .utils import (PrintUtils, merge_nested_dicts,
                     read_raw_file, resolve_path)
 
 
@@ -17,31 +19,36 @@ PS = TypeVar("PS", bound="PrintingSteps")
 CLI = TypeVar("CLI", bound="cli")
 
 
-class PrintEnum(MultiValueEnum):
-    PARSED = 'p', 'parsed'
-    CONTINUE = 'c', 'continue'
-    INPUTS = 'i', 'inputs'
-    DEFAULTS = 'd', 'defaults'
+class CliFlags(Enum):
+    CONFIG = 'config'
+    PARSED = 'parsed'
+    STOP = 'stop'
+    INPUTS = 'input'
+    OPTIONS = 'options'
+    DEBUG = 'debug'
+
+
+def make_flags(opt_name: CliFlags) -> Sequence[str]:
+    return f'-{opt_name.value[0]}', f'--{opt_name.value}'
 
 
 class PrintingSteps(Generic[PS]):
     def __init__(self: PS,
-                 print_steps: Optional[Sequence[PrintEnum]] = None):
-        self.print_steps = set(print_steps) or {PrintEnum.PARSED,
-                                                PrintEnum.CONTINUE}
+                 cli_flags: Dict[str, bool] = None):
+        cli_flags = cli_flags or {CliFlags.PARSED: True, CliFlags.STOP: False}
+        self.steps = {CliFlags(stp) for stp, flg in cli_flags.items() if flg}
 
-    def do_step(self: PS, step_name: PrintEnum) -> bool:
-        if step_name in self.print_steps:
-            self.print_steps.remove(step_name)
+    def do_step(self: PS, step_name: CliFlags) -> bool:
+        if step_name in self.steps:
+            self.steps.remove(step_name)
             return True
         return False
 
     def has_more_steps(self: PS) -> bool:
-        return len(self.print_steps) == 0
+        return len(self.steps) == 0
 
     def will_print(self: PS) -> bool:
-        return (len(self.print_steps) > 0  and
-                self.print_steps != {PrintEnum.CONTINUE})
+        return sum(1 for s in self.steps if s != CliFlags.DEBUG) > 0
 
 
 class cli(Generic[CLI]):
@@ -79,33 +86,50 @@ class cli(Generic[CLI]):
         current_dir = resolve_path(os.getcwd()) + '/'
         path_to_fn_file = resolve_path(getfile(func))
         rel_fn_file_path = path_to_fn_file.replace(current_dir, '')
-        usage = (f'python3 {rel_fn_file_path} '
-                 '{-c/--config config_file.yaml} '
-                 '{-p/--print [i, p, w]} '
-                 '{-d/--debug} '
-                 'param1=value1, …, paramN=valueN')
+
+        usage = (
+            f'python3 {rel_fn_file_path} '
+            f'{{{"/".join(make_flags(CliFlags.CONFIG))} config_file.yaml}} '
+            f'{{{"/".join(make_flags(CliFlags.OPTIONS))}}} '
+            f'{{{"/".join(make_flags(CliFlags.INPUTS))}}} '
+            f'{{{"/".join(make_flags(CliFlags.DEBUG))}}} '
+            f'{{{"/".join(make_flags(CliFlags.PARSED))}}} '
+            f'{{{"/".join(make_flags(CliFlags.STOP))}}} '
+            'param1=value1, …, paramN=valueN'
+        )
         ap = ArgumentParser(prog=prog, usage=usage)
 
-        # config option
-        msg = ('A path to a YAML file containing a configuration for '
-               'this program. It can be in the cloud or local.')
-        ap.add_argument('-c', '--config', default=None,
-                        help=msg, metavar='/path/to/config.yaml')
+        # add options
+        msg = 'A path to a YAML file containing a configuration.'
+        ap.add_argument(*make_flags(CliFlags.CONFIG),
+                        default=None,
+                        help=msg,
+                        metavar='/path/to/config.yaml')
 
-        # print option
-        msg = ('Options to print configuration. If i/inputs '
-               'it prints the input options; if p/parsed, it '
-               'prints the parsed configuration; if d/defaults, '
-               'it lists all defaults options. Add c/continue '
-               'to keep running the program after printing. '
-               'Default: "--print d --print c".')
-        ap.add_argument('-p', '--print', type=PrintEnum, metavar='flag',
-                        action='append', choices=PrintEnum,  help=msg,
-                        default=[])
+        msg = 'Print all default options and CLI flags.'
+        ap.add_argument(*make_flags(CliFlags.OPTIONS),
+                        action='store_true',
+                        help=msg)
 
-        # debug option
+        msg = 'Print the input configuration.'
+        ap.add_argument(*make_flags(CliFlags.INPUTS),
+                        action='store_true',
+                        help=msg)
+
+        msg = 'Print the parsed configuration.'
+        ap.add_argument(*make_flags(CliFlags.PARSED),
+                        action='store_true',
+                        help=msg)
+
         msg = 'Enter debug mode by setting global logging to DEBUG.'
-        ap.add_argument('-d', '--debug', action='store_true', help=msg)
+        ap.add_argument(*make_flags(CliFlags.DEBUG),
+                        action='store_true',
+                        help=msg)
+
+        msg = 'If provided, it stops running before running the script.'
+        ap.add_argument(*make_flags(CliFlags.STOP),
+                        action='store_true',
+                        help=msg)
 
         return ap
 
@@ -127,7 +151,7 @@ class cli(Generic[CLI]):
         opts, _args = ap.parse_known_args()
 
         # set some default options for when no options are provided
-        printing_steps = PrintingSteps(opts.print)
+        printing_steps = PrintingSteps(vars(opts))
 
         # setup debug
         if opts.debug:
@@ -139,7 +163,7 @@ class cli(Generic[CLI]):
         pu = PrintUtils(print_fn=print_fn)
 
         # Print default options if requested py the user
-        if printing_steps.do_step(PrintEnum.DEFAULTS):
+        if printing_steps.do_step(CliFlags.OPTIONS):
 
             params = ConfigNodeProps.get_all_parameters(config_node)
 
@@ -163,7 +187,7 @@ class cli(Generic[CLI]):
         config = merge_nested_dicts(file_config, cli_config)
 
         # print both configs if requested
-        if printing_steps.do_step(PrintEnum.INPUTS):
+        if printing_steps.do_step(CliFlags.INPUTS):
             pu.print('INPUT/COMMAND LINE:', cli_config)
             pu.print('INPUT/CONFIG FILE:', file_config)
 
@@ -176,15 +200,17 @@ class cli(Generic[CLI]):
         parsed_config = config_node(config)
 
         # print it if requested
-        if printing_steps.do_step(PrintEnum.PARSED):
+        if printing_steps.do_step(CliFlags.PARSED):
             pu.print('PARSED CONFIG:', parsed_config, yaml_fn=config_to_yaml)
 
-        if printing_steps.do_step(PrintEnum.CONTINUE):
-            # we execute the main method
-            return func(parsed_config, **kwargs)
+        if printing_steps.do_step(CliFlags.STOP):
+            # this will do nothing when called
+            return InitLater.no_op()
 
-        # this will do nothing when called
-        return InitLater.no_op()
+        # we execute the main method
+        return func(parsed_config, **kwargs)
+
+
 
     def __new__(cls,
                 config_node: Type[ConfigNode],

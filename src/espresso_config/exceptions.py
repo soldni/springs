@@ -1,2 +1,6 @@
 class ConfigInstantiateError(RuntimeError):
     ...
+
+
+class PlaceholderVariableError(ValueError):
+    ...
