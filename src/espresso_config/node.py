@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from inspect import getmembers, isclass, isroutine
 from typing import (
-    Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional,
+    Any, Dict, Generic, Iterable, List, NamedTuple, Optional,
     Sequence, Set, Tuple, Type, TypeVar, Union, get_type_hints
 )
 

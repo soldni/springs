@@ -7,7 +7,7 @@ import shutil
 from dataclasses import dataclass, field
 from enum import Enum
 from textwrap import dedent
-from typing import Any, Callable, Optional, Sequence, Type
+from typing import Any, Callable, Optional, OrderedDict, Sequence, Type
 
 import yaml
 
@@ -20,7 +20,10 @@ def clean_multiline(string: str) -> str:
 
 def merge_nested_dicts(*dicts: Sequence[dict]) -> dict:
     # all the merging is done in a new dict, not in place
-    out = {}
+    # important to sort: sometimes different keys get merged into
+    # the same key once a dict is resolved to a config, and
+    # that only happens if we keep track for the order
+    out = OrderedDict()
 
     for d in dicts:
         for k, v in d.items():
@@ -190,7 +193,7 @@ class PrintUtils:
         return out
 
 
-class _MissingMetaClass(type):
+class _FlagMetaclass(type):
     def __str__(cls) -> str:
         return '???'
 
@@ -201,8 +204,13 @@ class _MissingMetaClass(type):
         return False
 
 
-class MISSING(metaclass=_MissingMetaClass):
+class MISSING(metaclass=_FlagMetaclass):
     """Used to keep track of missing parameters"""
+    ...
+
+
+class FUTURE(metaclass=_FlagMetaclass):
+    """Used to keep track of parameters that we know be provided later"""
     ...
 
 

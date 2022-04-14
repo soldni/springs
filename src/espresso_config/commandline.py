@@ -1,16 +1,28 @@
-from distutils.debug import DEBUG
 from enum import Enum
 import os
 from argparse import ArgumentParser, Namespace
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import Any, Callable, Dict, Generic, Optional, Sequence, Type, TypeVar, Union
+from typing import (Any,
+    Callable,
+    Generic,
+    Optional,
+    Sequence,
+    Type,
+    TypeVar,
+    Union
+)
 
 import yaml
 
 from .functional import config_to_yaml
 from .instantiate import InitLater
-from .node import ConfigNode, ConfigNodeProps, ParameterSpec
+from .node import (
+    ConfigNode,
+    ConfigNodeProps,
+    ParameterSpec,
+    CONFIG_NODE_REGISTRY_SEPARATOR
+)
 from .utils import (PrintUtils, merge_nested_dicts,
                     read_raw_file, resolve_path, MISSING)
 
@@ -148,7 +160,6 @@ class cli(Generic[CLI]):
                         action='store_true',
                         default=MISSING,
                         help=msg)
-
         return ap
 
     @classmethod
