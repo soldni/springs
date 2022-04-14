@@ -114,7 +114,7 @@ class instantiate:
                        copy.deepcopy(config))
 
         if len(kwargs) > 0:
-            config_node = config_node << config_from_dict(kwargs, flex=True)
+            config_node = config_node << ConfigFlexNode(kwargs)
 
         if cls.TARGET not in config_node:
             msg = (f'Cannot instantiate from `{config_node}`: '
