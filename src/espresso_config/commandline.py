@@ -1,3 +1,4 @@
+from email.policy import default
 from enum import Enum
 import os
 from argparse import ArgumentParser, Namespace
@@ -197,7 +198,9 @@ class cli(Generic[CLI]):
             params = ConfigNodeProps.get_all_parameters(config_node)
 
             cli_opts_repr = ('CLI OPTIONS:', ) + tuple(
-                f'{p.name}: {p.type.__name__} = {p.default}'
+                f'{p.name}: {p.type.__name__} = ' +
+                # represent empty string as ''
+                (str(p.default) if p.default != '' else "''")
                 for p in params
             )
 
