@@ -96,6 +96,22 @@ class instantiate:
     TARGET: str = '_target_'
 
     @classmethod
+    def callable(cls: Type[IN],
+                 config: Union[Dict[str, Any], ConfigNode]) -> Callable:
+
+        if isinstance(config, dict):
+            config = ConfigFlexNode(config)
+
+        try:
+            target = config[cls.TARGET]
+        except KeyError:
+            raise KeyError(f'Config `{config}` has no `{cls.TARGET}` key!')
+
+        fn = get_callable(target)
+
+        return fn
+
+    @classmethod
     def later(
         cls: Type[IN],
         config: Union[Dict[str, Any], ConfigNode, None] = None,
@@ -121,8 +137,7 @@ class instantiate:
                    f'`{cls.TARGET}` keyword missing')
             raise ValueError(msg)
 
-        _target_ = ConfigNodeProps.get_props(config_node).pop(cls.TARGET)
-        fn = get_callable(_target_)
+        fn = cls.callable(config_node)
 
         def _recursive_init(param):
             if (_recursive_ and
@@ -131,7 +146,8 @@ class instantiate:
                 param = cls.later(config=param, _recursive_=True)
             return param
 
-        init_call_dict = {k: _recursive_init(v) for k, v in config_node}
+        init_call_dict = {k: _recursive_init(v) for k, v in config_node
+                          if k != cls.TARGET}
 
         return InitLater(fn, **init_call_dict)
 
