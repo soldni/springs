@@ -194,8 +194,10 @@ class PrintUtils:
 
 
 class _FlagMetaclass(type):
+    SYMBOL: str
+
     def __str__(cls) -> str:
-        return '???'
+        return cls.SYMBOL
 
     def __repr__(cls) -> str:
         return f'{cls.__name__}({str(cls)})'
@@ -204,14 +206,23 @@ class _FlagMetaclass(type):
         return False
 
 
-class MISSING(metaclass=_FlagMetaclass):
+class _AbstactFlag(metaclass=_FlagMetaclass):
+    ...
+
+
+class MISSING(_AbstactFlag):
     """Used to keep track of missing parameters"""
-    ...
+    SYMBOL = '???'
 
 
-class FUTURE(metaclass=_FlagMetaclass):
+class FUTURE(_AbstactFlag):
     """Used to keep track of parameters that we know be provided later"""
-    ...
+    SYMBOL = '>>>'
+
+
+class OPTIONAL(_AbstactFlag):
+    """Used to keep track of parameters that we know be provided later"""
+    SYMBOL = '***'
 
 
 def type_evaluator(field_type: Type[Any]) -> Callable:

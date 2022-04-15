@@ -12,7 +12,7 @@ from typing import (
 
 import yaml
 from .exceptions import PlaceholderVariableError
-from .utils import MISSING, hybridmethod
+from .utils import MISSING, hybridmethod, OPTIONAL
 
 
 # get logger for this file, mostly used for debugging
@@ -284,11 +284,13 @@ class ConfigNodeProps(Generic[CR]):
         annotations = cls.get_annotations(node_cls)
         defaults = cls.get_defaults(node_cls)
 
-        for param_name, param_annotation in annotations.items():
+        for name, ann in annotations.items():
+            default = defaults.get(
+                name,
+                OPTIONAL if isinstance(ann, OptionalConfigParam) else MISSING
+            )
             all_parameters.append(
-                ParameterSpec(name=param_name,
-                              type=param_annotation.type,
-                              default=defaults.get(param_name, MISSING))
+                ParameterSpec(name=name, type=ann.type, default=default)
             )
 
         for subnode_name, subnode_cls in cls.get_subnodes(node_cls).items():
