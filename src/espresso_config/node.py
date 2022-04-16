@@ -205,31 +205,66 @@ class ConfigNodeProps(Generic[CR]):
     @hybridmethod
     def get_annotations(
         cls: Type[CR],
-        node_cls: Type[CN]
+        node_cls: Type[CN],
+        traverse: bool = True
     ) -> Dict[str, ConfigParam]:
+
+        # traverse the inheritance tree if we are asked to; don't
+        # otherwise (that is, only return type annotations for this class.)
+        raw_annotations = (get_type_hints(node_cls) if traverse else
+                           getattr(node_cls, '__annotations__', {}))
+
         # these are all annotations for parameters for this node; we use
         # them to cast param values to the right type as we parse a config
-        annotations = {name: annotation for name, annotation in
-                       get_type_hints(node_cls).items()
+        annotations = {name: annotation
+                       for name, annotation in raw_annotations.items()
                        if isinstance(annotation, ConfigParam)}
         return annotations
 
     @get_annotations.instancemethod
-    def get_annotations(self: CR) -> Dict[str, ConfigParam]:
-        return type(self).get_annotations(self.node_cls)
+    def get_annotations(
+        self: CR,
+        traverse: bool = True
+    ) -> Dict[str, ConfigParam]:
+        return type(self).get_annotations(node_cls=self.node_cls,
+                                          traverse=traverse)
 
     @hybridmethod
     def get_defaults(cls: Type[CR], node_cls: Type[CN]) -> Dict[str, Any]:
         # These are all the default values that have been provided
         # for the parameters for this node.
 
+        # Calling with traverse == True returns all inherited
+        # and future type hints.
+        all_annotations = cls.get_annotations(node_cls, traverse=True)
+
+        # these are local annotations, i.e. annotations defined in this
+        # NodeConfig only.
+        local_annotations = cls.get_annotations(node_cls, traverse=False)
+
+        # This is a bit confusing but: sometimes a default
+        # is REMOVED when a new ConfigNode is created from a
+        # old config node. The use case is sample: you might want
+        # to make previously default parameters not default anymore.
+        # In that case, if the parameter is part of the
+        # local annotations, but not part of the values. (note
+        # we can't use hasattr() because that also resolves inheritance,
+        # so we use in vars() instead).
+        removed_defaults = {param_name for param_name in local_annotations
+                           if param_name not in vars(node_cls)}
+
         # We use getmembers instead of __dict__ because it
         # resolves inheritance (__dict__ does not!)
         all_members = dict(getmembers(node_cls))
 
+        # We are finally ready to compose defaults!
         defaults = {name: all_members[name]
-                    for name in cls.get_annotations(node_cls)
-                    if name in all_members}
+                    for name in all_annotations
+                    # has a default value somewhere in the MRO chain...
+                    if (name in all_members) and
+                    # but it wasn't explicitly removed.
+                    (not name in removed_defaults)}
+
         return defaults
 
     @get_defaults.instancemethod
