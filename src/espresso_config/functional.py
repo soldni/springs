@@ -2,9 +2,8 @@ import os
 from inspect import isclass
 from typing import Any, Callable, Dict, Type, Union, Optional
 
-import yaml
-
 from .node import ConfigNode, ConfigNodeProps, ConfigFlexNode
+from .parser import YamlParser
 from .utils import read_raw_file
 
 
@@ -32,7 +31,7 @@ def config_from_string(string: str,
     format. If a ConfigNode class is provided, then it is used
     to validate the string; if not, the schema is automatically
     inferred from the loaded yaml"""
-    parsed_yaml = yaml.safe_load(string)
+    parsed_yaml = YamlParser.load(string)
 
     if config_node_cls is None:
         return ConfigFlexNode(parsed_yaml)

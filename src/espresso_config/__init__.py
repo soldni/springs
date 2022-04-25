@@ -1,3 +1,5 @@
+# flake8: noqa
+
 from .node import (
     ConfigNode,
     ConfigFlexNode,
@@ -12,10 +14,11 @@ from .functional import (
     config_to_yaml,
 )
 from . import builtin_refs as _builtin_refs
-from .instantiate import instantiate
+from .instantiate import instantiate, TargetType
 from .logging import configure_logging
 from .commandline import cli
-from .experimental import (
+from .meta_params import (
     ConfigParamDictOfConfigNodes,
-    ConfigParamMultiType
+    ConfigParamMultiType,
+    ConfigParamLiteral
 )

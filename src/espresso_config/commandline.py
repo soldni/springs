@@ -1,32 +1,17 @@
-from email.policy import default
-from enum import Enum
 import os
 from argparse import ArgumentParser, Namespace
+from enum import Enum
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import (Any,
-    Callable,
-    Generic,
-    Optional,
-    Sequence,
-    Type,
-    TypeVar,
-    Union
-)
-
-import yaml
+from typing import (Any, Callable, Generic, Optional, Sequence, Type, TypeVar,
+                    Union)
 
 from .functional import config_to_yaml
 from .instantiate import InitLater
-from .node import (
-    ConfigNode,
-    ConfigNodeProps,
-    ParameterSpec,
-    CONFIG_NODE_REGISTRY_SEPARATOR
-)
-from .utils import (PrintUtils, merge_nested_dicts,
-                    read_raw_file, resolve_path, MISSING)
-
+from .node import ConfigNode, ConfigNodeProps, ParameterSpec
+from .parser import YamlParser
+from .utils import (MISSING, PrintUtils, merge_nested_dicts, read_raw_file,
+                    resolve_path)
 
 PS = TypeVar("PS", bound="PrintingSteps")
 CLI = TypeVar("CLI", bound="cli")
@@ -211,8 +196,9 @@ class cli(Generic[CLI]):
             ParameterSpec.from_string(a).to_dict() for a in _args
         ])
         file_config = (
-            yaml.safe_load(read_raw_file(opts.config, open_fn=open_fn))
-            if opts.config else {})
+            YamlParser.load(read_raw_file(opts.config, open_fn=open_fn))
+            if opts.config else {}
+        )
 
         # merge_nested_dicts is not commutative; cli_config gets
         # precedence over file config.
@@ -226,7 +212,7 @@ class cli(Generic[CLI]):
         if not printing_steps.has_more_steps():
             # nothing more to do, let's not risk
             # parsing, which might cause an error!
-           return InitLater.no_op()
+            return InitLater.no_op()
 
         # load configuration with node parsers
         parsed_config = config_node(config)
@@ -241,7 +227,6 @@ class cli(Generic[CLI]):
 
         # we execute the main method
         return func(parsed_config, **kwargs)
-
 
     def __new__(cls,
                 config_node: Type[ConfigNode],

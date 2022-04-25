@@ -9,7 +9,7 @@ from enum import Enum
 from textwrap import dedent
 from typing import Any, Callable, Optional, OrderedDict, Sequence, Type
 
-import yaml
+from .parser import YamlParser
 
 
 def clean_multiline(string: str) -> str:
@@ -109,7 +109,7 @@ class hybridmethod:
 
     def __get__(self, instance, cls):
         if instance is None or self.f_instance is None:
-              # either bound to the class, or no instance method available
+            # either bound to the class, or no instance method available
             return self.f_class.__get__(cls, None)
         return self.f_instance.__get__(instance, cls)
 
@@ -182,7 +182,7 @@ class PrintUtils:
             # this is in case the dict/list is empty
             return str(content)
 
-        yaml_fn = yaml_fn or yaml.safe_dump
+        yaml_fn = yaml_fn or YamlParser.dump
 
         out = yaml_fn(content,
                       indent=self.indent_step,
@@ -193,8 +193,9 @@ class PrintUtils:
         return out
 
 
-class _FlagMetaclass(type):
+class FLAG(type):
     SYMBOL: str
+    __YAML__: dict = {}
 
     def __str__(cls) -> str:
         return cls.SYMBOL
@@ -205,22 +206,30 @@ class _FlagMetaclass(type):
     def __bool__(cls) -> bool:
         return False
 
+    @classmethod
+    def yaml(cls, flag_cls):
+        cls.__YAML__[str(flag_cls)] = flag_cls
+        return YamlParser.register(
+            node_type=cls,
+            node_dump=str,
+            node_load=lambda s: cls.__YAML__[s]
+        )(flag_cls)
 
-class _AbstactFlag(metaclass=_FlagMetaclass):
-    ...
 
-
-class MISSING(_AbstactFlag):
+@FLAG.yaml
+class MISSING(metaclass=FLAG):
     """Used to keep track of missing parameters"""
     SYMBOL = '???'
 
 
-class FUTURE(_AbstactFlag):
+@FLAG.yaml
+class FUTURE(metaclass=FLAG):
     """Used to keep track of parameters that we know be provided later"""
     SYMBOL = '>>>'
 
 
-class OPTIONAL(_AbstactFlag):
+@FLAG.yaml
+class OPTIONAL(metaclass=FLAG):
     """Used to keep track of parameters that we know be provided later"""
     SYMBOL = '***'
 
@@ -232,7 +241,7 @@ def type_evaluator(field_type: Type[Any]) -> Callable:
     def _type_fn(value: str) -> field_type:
         if not issubclass(field_type, str):
             # we use yaml to do the casting!
-            value = yaml.safe_load(value)
+            value = YamlParser.load(value)
 
         return field_type(value)
     return _type_fn

@@ -11,7 +11,7 @@ from .node import (
 )
 from .registry import ConfigRegistry
 from .utils import merge_nested_dicts, FUTURE
-from .instantiate import get_callable
+from .instantiate import TargetType
 
 
 @ConfigRegistry.add
@@ -32,7 +32,7 @@ def __is_type__(*args, **kwargs) -> str:
         raise ValueError(msg)
 
     node_source, target_type, *_ = args
-    target_type = get_callable(target_type)
+    target_type = TargetType.get_callable(target_type)
 
     if node_source == '${epochs}':
         raise ValueError()

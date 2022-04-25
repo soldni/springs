@@ -1,20 +1,18 @@
 import copy
 import functools
 import importlib
+import inspect
 import itertools
 
-from typing import Any, Callable, Dict, Sequence, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Sequence, Type, Union
 
 from .exceptions import ConfigInstantiateError
 from .utils import clean_multiline
-from .node import ConfigNode, ConfigNodeProps, Generic, ConfigFlexNode
-
-IT = TypeVar('IT', bound='InitLater')
-GC = TypeVar('GC', bound='get_callable')
-IN = TypeVar('IN', bound='instantiate')
+from .parser import YamlParser
+from .node import ConfigNode, ConfigFlexNode
 
 
-class InitLater(functools.partial, Generic[IT]):
+class InitLater(functools.partial):
     def get_kw(self, *args, **kwargs):
         """Shortcut for accessing parameters that have been
         provided to an InitLater object"""
@@ -30,7 +28,7 @@ class InitLater(functools.partial, Generic[IT]):
         ...
 
     @classmethod
-    def no_op(cls) -> IT:
+    def no_op(cls) -> 'InitLater':
         """Create an init later that does nothing.
         Useful for when trying to instantiate from None."""
         return cls(cls._no_op)
@@ -47,7 +45,7 @@ class InitLater(functools.partial, Generic[IT]):
         args = [v() if isinstance(v, InitLater) else v
                 for v in itertools.chain(self.args, args)]
         kwargs = {k: v() if isinstance(v, InitLater) else v
-                    for k, v in {**self.keywords, **kwargs}.items()}
+                  for k, v in {**self.keywords, **kwargs}.items()}
         try:
             return self.func(*args, **kwargs)
         except Exception as e:
@@ -62,7 +60,8 @@ class InitLater(functools.partial, Generic[IT]):
                 .with_traceback(e.__traceback__)
 
 
-class get_callable:
+@YamlParser.register()
+class TargetType:
     @staticmethod
     def is_module(path: str) -> bool:
         try:
@@ -72,7 +71,29 @@ class get_callable:
             return False
 
     @classmethod
-    def _get_callable(cls: Type[GC], path: str) -> Callable:
+    def to_yaml(cls: Type['TargetType'], target_type_obj: 'TargetType') -> str:
+        callable_ = target_type_obj.callable
+        if inspect.isclass(callable_):
+            object_name = callable_.__name__
+            module_name = inspect.getmodule(callable_).__name__
+        else:
+            if hasattr(callable_, '__self__'):
+                # method of a function
+                module_name = inspect.getmodule(callable_.__self__).__name__
+                object_name = '{}.{}'.format(
+                    callable_.__self__.__name__ if
+                    inspect.isclass(callable_.__self__)
+                    else callable_.__self__.__class__.__name__,
+                    callable_.__name__
+                )
+            else:
+                module_name = inspect.getmodule(callable_).__name__
+                object_name = callable_.__name__
+
+        return f'{module_name}.{object_name}'
+
+    @classmethod
+    def get_callable(cls: Type['TargetType'], path: str) -> Callable:
         if cls.is_module(path):
             return importlib.import_module(path)
         elif '.' in path:
@@ -80,23 +101,30 @@ class get_callable:
             if cls.is_module(m_name):
                 container = importlib.import_module(m_name)
             else:
-                container = get_callable(m_name)
-            return getattr(container, c_name)
+                container = cls.get_callable(m_name)
+            callable_ = getattr(container, c_name, None)
         else:
-            return globals().get(path, __builtins__.get(path, None))
+            callable_ = globals().get(path, __builtins__.get(path, None))
 
-    def __new__(cls: Type[GC], path: str) -> Callable:
-        cl_ = cls._get_callable(path)
-        if cl_ is None:
-            raise ModuleNotFoundError(f'Could not find `{path}`')
-        return cl_
+        if callable_ is None:
+            raise ImportError(f'Cannot find callable at {path}')
+
+        return callable_
+
+    def __init__(self: 'TargetType', path_or_callable: Union[str, Callable]):
+        if isinstance(path_or_callable, str):
+            path_or_callable = self.get_callable(path_or_callable)
+        self.callable = path_or_callable
+
+    def __call__(self, *args, **kwargs):
+        return self.callable(*args, **kwargs)
 
 
 class instantiate:
     TARGET: str = '_target_'
 
     @classmethod
-    def callable(cls: Type[IN],
+    def callable(cls: Type['instantiate'],
                  config: Union[Dict[str, Any], ConfigNode]) -> Callable:
 
         if isinstance(config, dict):
@@ -107,13 +135,14 @@ class instantiate:
         except KeyError:
             raise KeyError(f'Config `{config}` has no `{cls.TARGET}` key!')
 
-        fn = get_callable(target)
+        if not isinstance(target, TargetType):
+            target = TargetType(target)
 
-        return fn
+        return target
 
     @classmethod
     def later(
-        cls: Type[IN],
+        cls: Type['instantiate'],
         config: Union[Dict[str, Any], ConfigNode, None] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
@@ -140,9 +169,10 @@ class instantiate:
         fn = cls.callable(config_node)
 
         def _recursive_init(param):
-            if (_recursive_ and
-                isinstance(param, (ConfigNode, dict))
-                and cls.TARGET in param):
+            must_recursive_init = (_recursive_ and
+                                   isinstance(param, (ConfigNode, dict))
+                                   and cls.TARGET in param)
+            if must_recursive_init:
                 param = cls.later(config=param, _recursive_=True)
             return param
 
@@ -153,7 +183,7 @@ class instantiate:
 
     @classmethod
     def now(
-        cls: Type[IN],
+        cls: Type['instantiate'],
         config: Union[ConfigNode, dict] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
@@ -165,7 +195,7 @@ class instantiate:
 
         return cls.later(config=config, _recursive_=_recursive_, **kwargs)()
 
-    def __new__(cls: Type[IN],
+    def __new__(cls: Type['instantiate'],
                 *args: Sequence[Any],
                 **kwargs: Dict[str, Any]) -> object:
         """Alias for `instantitate.now`"""

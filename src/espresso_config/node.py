@@ -6,12 +6,24 @@ import re
 from dataclasses import dataclass, field
 from inspect import getmembers, isclass, isroutine
 from typing import (
-    Any, Dict, Generic, Iterable, List, NamedTuple, Optional,
-    Sequence, Set, Tuple, Type, TypeVar, Union, get_type_hints
+    Any,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    get_type_hints
 )
 
-import yaml
 from .exceptions import PlaceholderVariableError
+from .parser import YamlParser
 from .utils import MISSING, hybridmethod, OPTIONAL
 
 
@@ -52,7 +64,7 @@ class ParameterSpec(NamedTuple):
             msg = f"Cannot parse string '{string}' into a parameter"
             raise ValueError(msg)
         name, default = string.split('=', 1)
-        default = yaml.safe_load(default)
+        default = YamlParser.load(default)
         return cls(name=name, default=default, type=type(default))
 
     def to_dict(self: PS) -> dict:
@@ -137,7 +149,7 @@ class ConfigRegistryReference(Generic[CE]):
         if node_cls:
             if isclass(node_cls) and not issubclass(node_cls, ConfigNode):
                 msg = ('The registry reference resolver has receive an object'
-                        f'of type {node_cls}, which is not a ConfigNode')
+                       f'of type {node_cls}, which is not a ConfigNode')
                 raise ValueError(msg)
 
             # we operate slightly differently depending if the registry
@@ -194,7 +206,7 @@ class ConfigNodeProps(Generic[CR]):
         self.parent = self.node if parent_node is None else parent_node
 
     def set_name(self: CR, node_name: Union[str, None]):
-            # set the full path to this node as its name
+        # set the full path to this node as its name
         self.short_name = self.cls_name if node_name is None else node_name
         if self.is_root():
             self.long_name = self.short_name
@@ -251,7 +263,7 @@ class ConfigNodeProps(Generic[CR]):
         # we can't use hasattr() because that also resolves inheritance,
         # so we use in vars() instead).
         removed_defaults = {param_name for param_name in local_annotations
-                           if param_name not in vars(node_cls)}
+                            if param_name not in vars(node_cls)}
 
         # We use getmembers instead of __dict__ because it
         # resolves inheritance (__dict__ does not!)
@@ -263,7 +275,7 @@ class ConfigNodeProps(Generic[CR]):
                     # has a default value somewhere in the MRO chain...
                     if (name in all_members) and
                     # but it wasn't explicitly removed.
-                    (not name in removed_defaults)}
+                    (name not in removed_defaults)}
 
         return defaults
 
@@ -426,7 +438,7 @@ class ConfigNodeProps(Generic[CR]):
     def to_yaml(self: CR,
                 *args: Sequence[Any],
                 **kwargs: Dict[str, Any]) -> str:
-        return yaml.safe_dump(self.to_dict(), *args, **kwargs)
+        return YamlParser.dump(self.to_dict(), *args, **kwargs)
 
     def validate_subnodes(self: CR, subnodes_to_validate: Sequence[str]):
         """Check that if specified subnodes are instances of ConfigNode;
@@ -450,9 +462,9 @@ class ConfigNodeProps(Generic[CR]):
 
     @hybridmethod
     def merge_nodes(cls: Type[CR],
-               node: CN,
-               other_node: CN,
-               flex: bool = False) -> CN:
+                    node: CN,
+                    other_node: CN,
+                    flex: bool = False) -> CN:
         """Create a new node node where values form `node`
         are updated with values from `other_node`."""
 
@@ -487,7 +499,7 @@ class ConfigNode(Generic[CN]):
     def __init__(
         self: CN,
         config: Optional[Union[Dict[str, Any], CN]] = None,
-        __parent__ : CN = None,
+        __parent__: CN = None,
         __flex_node__: bool = False,
         __name__: str = None,
         **kwargs: Dict[str, Any],
@@ -546,10 +558,10 @@ class ConfigNode(Generic[CN]):
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ PHASE 1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Override with options that are provided in `config` dictionary
         for param_name, param_value in config.items():
-            # a little lambda function to log how we are doing
-            debug_call = lambda case: LOGGER.debug(
-                f'[PHASE 1][{node_props.long_name}][{case}] {param_name}'
-            )
+            # a little function to log how we are doing
+            def debug_call(case: str):
+                LOGGER.debug(f'[PHASE 1][{node_props.long_name}][{case}]'
+                             f'{param_name}')
 
             if ConfigRegistryReference.contains(param_name):
                 # we have a registry reference! we need to extract the
@@ -561,9 +573,10 @@ class ConfigNode(Generic[CN]):
                 registry_reference = None
 
             # check if it is a valid parameter, if not, raise a KeyError
-            if ((param_name not in annotations) and
-                (param_name not in subnodes) and
-                not(__flex_node__)):
+            is_supported_parameter = (param_name not in annotations and
+                                      param_name not in subnodes and
+                                      not __flex_node__)
+            if is_supported_parameter:
                 debug_call('0.not_supported')
                 # CASE 0: we can't add this key to this config; raise an error.
                 msg = (f'Parameter "{param_name}" not '
@@ -589,7 +602,7 @@ class ConfigNode(Generic[CN]):
                     debug_call('1.S1.1.registry+submodule')
                     node_cls_to_merge = subnodes[param_name]
                 elif (param_name in annotations and
-                    issubclass(annotations[param_name].type, ConfigNode)):
+                      issubclass(annotations[param_name].type, ConfigNode)):
                     # CASE 1.S1.2: we also need to merge with the type we also
                     #              get from the parameter annotation. This is
                     #              usually empty, but we merge with it for
@@ -660,7 +673,8 @@ class ConfigNode(Generic[CN]):
                 # parameter is, so we first extract the type.
                 param_type = annotations[param_name].type
 
-                if (isclass(param_type) and issubclass(param_type, ConfigNode)):
+                if isclass(param_type) \
+                        and issubclass(param_type, ConfigNode):
                     # CASE 3.1: sometimes the type of a paramemter is
                     #           ConfigNode or a subclass of it, making
                     #           necessary to pass some extra parameters to
@@ -678,7 +692,9 @@ class ConfigNode(Generic[CN]):
                         )
                     else:
                         debug_call('3.1.2.ann_subnode/skip_cast')
-                        param_type = lambda x: x
+
+                        def param_type(x):
+                            return x
                 elif isinstance(param_value, param_type):
                     # We cast to param_type, but only if we absolutely
                     # have to. This prevents unwanted initializations is
@@ -694,7 +710,9 @@ class ConfigNode(Generic[CN]):
                     # if the object is already of the expected type should
                     # fix this).
                     debug_call('3.2.ann_skip_casting')
-                    param_type = lambda x: x
+
+                    def param_type(x):
+                        return x
                 else:
                     # this is the case where we cast
                     debug_call('3.3.ann_do_cast')
@@ -759,8 +777,8 @@ class ConfigNode(Generic[CN]):
 
             if is_missing_default and is_optional_default:
                 msg = (f'[PHASE 2][CLS {type(self).__name__}] '
-                        f'Skipping {param_name} because it is '
-                        f'annotated as {OptionalConfigParam.__name__}')
+                       f'Skipping {param_name} because it is '
+                       f'annotated as {OptionalConfigParam.__name__}')
                 LOGGER.debug(msg)
             elif is_missing_default:
                 # This parameter was not overwritten by the configuration
@@ -924,10 +942,8 @@ class ConfigPlaceholderVar(Generic[CV]):
                                   else lambda x: x)
         self.placeholder_vars = []
 
-        # import here to avoid cycles
-        from espresso_config.registry import ConfigRegistry
-
-        for match in re.finditer(CONFIG_PLACEHOLDER_VAR_TEMPLATE, param_value):
+        for match in re.finditer(CONFIG_PLACEHOLDER_VAR_TEMPLATE,
+                                 param_value):
             var_path_and_registry = match.group()[2:-1]
             if var_path_and_registry == '':
                 # CASE 0: the regex matches even in cases the variable
@@ -981,11 +997,12 @@ class ConfigPlaceholderVar(Generic[CV]):
             # apply_vars to make sure that all substitutions in
             # the subnode are gracefully handled.
             if isinstance(placeholder_substitution, ConfigNode):
-                ConfigNodeProps.get_props(placeholder_substitution).apply_vars()
+                ConfigNodeProps.get_props(placeholder_substitution)\
+                    .apply_vars()
 
             # trick of the century: sometimes, by doing variable resolution,
-            # we end up with another variable! in that case, we simply
-            # tell the parent node with the class to do variable resolution too.
+            # we end up with another variable! in that case, we simply tell
+            # the parent node with the class to do variable resolution too.
             if isinstance(placeholder_substitution, ConfigPlaceholderVar):
                 # asking the parent to apply all its vars!
                 ConfigNodeProps.get_props(
