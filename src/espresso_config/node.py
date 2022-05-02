@@ -311,8 +311,11 @@ class ConfigNodeProps(Generic[CR]):
     def get_all_cls_members(cls: Type[CR],
                             node_cls: Type[CN]) -> Dict[str, Any]:
         all_non_routines = getmembers(node_cls, lambda a: not(isroutine(a)))
-        invalid_name_fn = lambda n: ((n.startswith('__') and n.endswith('__'))
-                                     or n == '_is_protocol')
+
+        def invalid_name_fn(fn_name: str):
+            return ((fn_name.startswith('__') and fn_name.endswith('__'))
+                    or fn_name == '_is_protocol')
+
         members = {name: value for name, value in all_non_routines
                    if not invalid_name_fn(name)}
         return members
@@ -919,7 +922,7 @@ class ConfigPlaceholderVar(Generic[CV]):
 
         PLACEHOLDER := ${PATH_TO_VALUE}
         PATH_TO_VALUE := PATH_TO_VALUE.VAR_NAME
-        VAR_NAME := [a-zA-Z_]\w+
+        VAR_NAME := [a-zA-Z_]\\w+
 
     PATH_TO_VALUE is used to traverse down the config node
     to find suitable replacement values for the placeholder.

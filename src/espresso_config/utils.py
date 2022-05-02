@@ -149,7 +149,7 @@ class PrintUtils:
         for line in lines:
             if not line:
                 # backtrack the new line you just added from previous
-                # argument if the current argument evals to none, like
+                # argument if the current argument evaluates to none, like
                 # an empty string, or an empty dict
                 content = f'{content.rstrip()} '
 

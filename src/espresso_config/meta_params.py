@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Sequence, Set, Tuple, Type, Dict
+from typing import Any, Optional, Sequence, Set, Tuple, Type, Dict
 
 from .node import (
     ConfigNode,
@@ -7,7 +7,9 @@ from .node import (
     ConfigParam,
 )
 
-__all__ = ['ConfigParamMultiType', 'ConfigParamDictOfConfigNodes']
+__all__ = ['ConfigParamMultiType',
+           'ConfigParamDictOfConfigNodes',
+           'ConfigParamLiteral']
 
 
 class _MultiTypeMeta(type):
@@ -20,17 +22,17 @@ class _MultiTypeMeta(type):
 class _MultiType(metaclass=_MultiTypeMeta):
     types = Tuple[Type]
 
-    def __str__(self):
+    def __str__(self: '_MultiType') -> str:
         types_repr = "|".join(repr(t) for t in self.types)
         return f'{type(self).__name__}({types_repr})'
 
-    def __repr__(self):
+    def __repr__(self: '_MultiType') -> str:
         return self.__str__()
 
-    def __instancecheck__(cls, __instance: Any) -> bool:
+    def __instancecheck__(cls: Type['_MultiType'], __instance: Any) -> bool:
         return isinstance(__instance, cls.types)
 
-    def __new__(cls, to_cast):
+    def __new__(cls: Type['_MultiType'], to_cast: Any) -> types:
         if not isinstance(to_cast, cls.types):
             # we try to cast one type at the time
             for t in cls.types:
@@ -39,19 +41,24 @@ class _MultiType(metaclass=_MultiTypeMeta):
                     # casting is successful
                     return t(to_cast)
 
-                except Exception as e:
+                except Exception:
+                    # we raise an exception at the end if no casting
+                    # occurs, so we pass for now
                     ...
 
             msg = (f'`{to_cast}` cannot be casted to ' +
                    ", ".join(t.__name__ for t in cls.types))
             raise ValueError(msg)
+
         return to_cast
+
 
 class ConfigParamMultiType(ConfigParam):
     """A ConfigParameter that accepts multiple types.
     casting to parameters is resolved in the order they
     are provided."""
-    def __init__(self, *target_types: Sequence[Type]):
+
+    def __init__(self: 'ConfigParamMultiType', *target_types: Sequence[Type]):
         # in case target types is an iterable
         target_types = tuple(t for t in target_types)
 
@@ -62,13 +69,13 @@ class ConfigParamMultiType(ConfigParam):
                for t in target_types):
             # TODO: support nested configs
             msg = (f'{type(self).__name__} does not currently accept '
-                    'ConfigNode as one of the provided types.')
+                   'ConfigNode as one of the provided types.')
             raise ValueError(msg)
 
         self._types = target_types
 
     @property
-    def type(self):
+    def type(self: 'ConfigParamMultiType') -> Type[_MultiType]:
         # because the dynamic class doesn't get pickled, we
         # are good to go here!
         target_type_repr = ', '.join(t.__name__ for t in self._types)
@@ -94,7 +101,9 @@ class _MultiLiteralType(_MultiType):
 class ConfigParamLiteral(ConfigParamMultiType):
     """A ConfigParam that accept specific values."""
 
-    def __init__(self, *literals: Sequence[Any], type_=None):
+    def __init__(self: 'ConfigParamLiteral',
+                 *literals: Sequence[Any],
+                 type_: Optional[Type] = None):
         if len(literals) < 1:
             raise ValueError('At least one literal must be provided')
 
@@ -106,7 +115,7 @@ class ConfigParamLiteral(ConfigParamMultiType):
         super().__init__(*target_types)
 
     @property
-    def type(self):
+    def type(self: 'ConfigParamLiteral') -> Type[_MultiLiteralType]:
         target_type_repr = ', '.join(t.__name__ for t in self._types)
         target_lit_repr = f'{{{", ".join(self._literals)}}}'
         return type(
@@ -119,7 +128,7 @@ class ConfigParamLiteral(ConfigParamMultiType):
 class _DictOfConfigNodes(ConfigFlexNode):
     node_cls: Type[ConfigNode]
 
-    def __new__(cls,
+    def __new__(cls: Type['_DictOfConfigNodes'],
                 config: Dict[str, dict],
                 *args,
                 **kwargs):
@@ -158,11 +167,12 @@ class ConfigParamDictOfConfigNodes(ConfigParam):
     ```
     """
 
-    def __init__(self, node_cls: Type[ConfigNode]):
+    def __init__(self: 'ConfigParamDictOfConfigNodes',
+                 node_cls: Type[ConfigNode]):
         self.node_cls = node_cls
 
     @property
-    def type(self):
+    def type(self: 'ConfigParamDictOfConfigNodes') -> Type[_DictOfConfigNodes]:
         # because the dynamic class doesn't get pickled, we
         # are good to go here!
         return type(f'DictOfConfigNodes({self.node_cls.__name__})',

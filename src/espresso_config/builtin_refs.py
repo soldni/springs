@@ -15,7 +15,7 @@ from .instantiate import TargetType
 
 
 @ConfigRegistry.add
-def __is_type__(*args, **kwargs) -> str:
+def __is_type__(*args, **_) -> str:
     """Check if the provided value matches the target type.
     Usage example:
 
@@ -80,7 +80,7 @@ def __environ__(*args, **kwargs) -> str:
 
 
 @ConfigRegistry.add
-def __timestamp__(*args, **kwargs) -> str:
+def __timestamp__(*_, **__) -> str:
     """Returns a timestamp in the format
     year-month-day_hour-minute-second."""
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")

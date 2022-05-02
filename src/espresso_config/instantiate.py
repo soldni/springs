@@ -70,6 +70,12 @@ class TargetType:
         except ModuleNotFoundError:
             return False
 
+    def __repr__(self: 'TargetType') -> str:
+        return f'{type(self).__name__}({str(self)})'
+
+    def __str__(self: 'TargetType') -> str:
+        return self.to_yaml(self)
+
     @classmethod
     def to_yaml(cls: Type['TargetType'], target_type_obj: 'TargetType') -> str:
         callable_ = target_type_obj.callable

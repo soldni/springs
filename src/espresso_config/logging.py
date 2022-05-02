@@ -1,7 +1,8 @@
 import logging
 import os
 from multiprocessing import current_process
-from typing import Union
+from typing import Type, Union
+import warnings
 
 from .utils import mkdir_p
 
@@ -10,12 +11,20 @@ class configure_logging:
     _DEBUG_MODE = None
 
     @classmethod
-    def debug(cls, *args, logging_level=None, **kwargs) -> logging.Logger:
+    def debug(cls: Type['configure_logging'],
+              *args,
+              logging_level: int = None,
+              **kwargs) -> logging.Logger:
+
+        if logging_level is not None:
+            msg = '`logging_level` was provided to `debug`, but it is ignored'
+            warnings.warn(msg)
+
         cls._DEBUG_MODE = True
         return cls(*args, logging_level=logging.DEBUG, **kwargs)
 
     def __new__(
-        cls,
+        cls: Type['configure_logging'],
         logger_name: str = None,
         file_logging_path: str = None,
         make_dir_if_missing: bool = True,
