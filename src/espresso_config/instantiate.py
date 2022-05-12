@@ -13,12 +13,12 @@ from .node import ConfigNode, ConfigFlexNode
 
 
 class InitLater(functools.partial):
-    def get_kw(self, *args, **kwargs):
+    def get_kw(self: 'InitLater', *args, **kwargs):
         """Shortcut for accessing parameters that have been
         provided to an InitLater object"""
         return self.keywords.get(*args, **kwargs)
 
-    def pop_kw(self, *args, **kwargs):
+    def pop_kw(self: 'InitLater', *args, **kwargs):
         """Shortcut for popping parameters that have been
         provided to an InitLater object"""
         return self.keywords.pop(*args, **kwargs)
@@ -28,18 +28,18 @@ class InitLater(functools.partial):
         ...
 
     @classmethod
-    def no_op(cls) -> 'InitLater':
+    def no_op(cls: Type['InitLater']) -> 'InitLater':
         """Create an init later that does nothing.
         Useful for when trying to instantiate from None."""
         return cls(cls._no_op)
 
-    def __bool__(self) -> bool:
+    def __bool__(self: 'InitLater') -> bool:
         # this allows us to check if the InitLater object
         # is "True" (that is, it is a real wrapped function),
         # or if it is "False" (it's a no-op)
         return self.func != self._no_op
 
-    def __call__(self, /, *args, **kwargs):
+    def __call__(self: 'InitLater', /, *args, **kwargs):
         # recursively call deferred initialization if
         # we encounter another InitLater
         args = [v() if isinstance(v, InitLater) else v
@@ -50,14 +50,13 @@ class InitLater(functools.partial):
             return self.func(*args, **kwargs)
         except Exception as e:
             ex_name = type(e).__name__
-            fn_name = self.func.__name__
+            fn_name = repr(self.func)
             msg = clean_multiline(f'''
                 An error occurred while trying to initialize {fn_name}
                 with arguments "{args}" and kwargs "{kwargs}":
                 {ex_name}("{' '.join(map(str, e.args))}")
             ''')
-            raise ConfigInstantiateError(msg)\
-                .with_traceback(e.__traceback__)
+            raise ConfigInstantiateError(msg).with_traceback(e.__traceback__)
 
 
 @YamlParser.register()
@@ -133,8 +132,14 @@ class instantiate:
     def callable(cls: Type['instantiate'],
                  config: Union[Dict[str, Any], ConfigNode]) -> Callable:
 
-        if isinstance(config, dict):
-            config = ConfigFlexNode(config)
+        if not isinstance(config, ConfigNode):
+            # in case the config is not a configuration node, but a
+            # simple dictionary, we attempt making a config node.
+            try:
+                config = ConfigFlexNode(config)
+            except Exception as e:
+                msg = f'Cannot get config from object of type `{type(config)}`'
+                raise ValueError(msg) from e
 
         try:
             target = config[cls.TARGET]

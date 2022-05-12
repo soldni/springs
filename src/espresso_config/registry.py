@@ -1,9 +1,9 @@
 import inspect
-from typing import Callable, Generic, Type, TypeVar, Union
+from typing import Callable, Type, Union
 
 from .node import ConfigNode
 
-CR = TypeVar('CR', bound='ConfigRegistry')
+
 RegistrableType = Union[Type[ConfigNode], Callable]
 
 
@@ -12,11 +12,12 @@ class MetaConfigRegistry(Type):
         return name in getattr(cls, '__registry__', {})
 
 
-class ConfigRegistry(Generic[CR], metaclass=MetaConfigRegistry):
+class ConfigRegistry(metaclass=MetaConfigRegistry):
     __registry__ = {}
 
     @classmethod
-    def add(cls, config_node_cls: RegistrableType) -> ConfigNode:
+    def add(cls: Type['ConfigRegistry'],
+            config_node_cls: RegistrableType) -> ConfigNode:
         is_node_config = (inspect.isclass(config_node_cls) and
                           issubclass(config_node_cls, ConfigNode))
         is_callable = isinstance(config_node_cls, Callable)
@@ -35,7 +36,7 @@ class ConfigRegistry(Generic[CR], metaclass=MetaConfigRegistry):
         return config_node_cls
 
     @classmethod
-    def get(cls, name: str) -> ConfigNode:
+    def get(cls: Type['ConfigRegistry'], name: str) -> ConfigNode:
         if name not in cls.__registry__:
             raise KeyError(f'`{name}` is not in the registry')
         return cls.__registry__[name]

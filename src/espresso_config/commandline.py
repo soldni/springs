@@ -3,18 +3,14 @@ from argparse import ArgumentParser, Namespace
 from enum import Enum
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import (Any, Callable, Generic, Optional, Sequence, Type, TypeVar,
-                    Union)
+from typing import Any, Callable, Optional, Sequence, Type, Union
 
 from .functional import config_to_yaml
 from .instantiate import InitLater
 from .node import ConfigNode, ConfigNodeProps, ParameterSpec
 from .parser import YamlParser
 from .utils import (MISSING, PrintUtils, merge_nested_dicts, read_raw_file,
-                    resolve_path)
-
-PS = TypeVar("PS", bound="PrintingSteps")
-CLI = TypeVar("CLI", bound="cli")
+                    resolve_path, clean_multiline)
 
 
 class CliFlags(Enum):
@@ -30,8 +26,8 @@ def make_flags(opt_name: CliFlags) -> Sequence[str]:
     return f'-{opt_name.value[0]}', f'--{opt_name.value}'
 
 
-class PrintingSteps(Generic[PS]):
-    def __init__(self: PS, ns: Union[Namespace, dict]):
+class PrintingSteps:
+    def __init__(self: 'PrintingSteps', ns: Union[Namespace, dict]):
 
         # turn the namespace to a dictionary
         ns = vars(ns) if isinstance(ns, Namespace) else ns
@@ -49,22 +45,22 @@ class PrintingSteps(Generic[PS]):
         # convert to Enum entries
         self.steps = {CliFlags(stp) for stp, flg in cli_flags.items() if flg}
 
-    def do_step(self: PS, step_name: CliFlags) -> bool:
+    def do_step(self: 'PrintingSteps', step_name: CliFlags) -> bool:
         if step_name in self.steps:
             self.steps.remove(step_name)
             return True
         return False
 
-    def has_more_steps(self: PS) -> bool:
+    def has_more_steps(self: 'PrintingSteps') -> bool:
         return self.steps != {CliFlags.STOP}
 
-    def will_print(self: PS) -> bool:
+    def will_print(self: 'PrintingSteps') -> bool:
         return self.steps and self.has_more_steps()
 
 
-class cli(Generic[CLI]):
+class cli:
     @classmethod
-    def _check_signature(cls: Type[CLI], func: Callable):
+    def _check_signature(cls: Type['cli'], func: Callable):
         expected_args = getfullargspec(func).args
         if len(expected_args) == 0:
             msg = (f'Function `{func.__name__}` cannot be decorated '
@@ -80,7 +76,7 @@ class cli(Generic[CLI]):
             raise RuntimeError(msg)
 
     @classmethod
-    def _check_args(cls: Type[CLI], func: Callable, args: Sequence[Any]):
+    def _check_args(cls: Type['cli'], func: Callable, args: Sequence[Any]):
         if len(args):
             msg = (f'After decorating `{func.__name__}` with '
                    f'`config_to_program`, do not provide any additional '
@@ -89,7 +85,7 @@ class cli(Generic[CLI]):
             raise RuntimeError(msg)
 
     @classmethod
-    def _make_argument_parser(cls: Type[CLI],
+    def _make_argument_parser(cls: Type['cli'],
                               func: Callable,
                               config_node: ConfigNode) -> ArgumentParser:
         # setup argparse
@@ -98,16 +94,16 @@ class cli(Generic[CLI]):
         path_to_fn_file = resolve_path(getfile(func))
         rel_fn_file_path = path_to_fn_file.replace(current_dir, '')
 
-        usage = (
-            f'python3 {rel_fn_file_path} '
-            f'{{{"/".join(make_flags(CliFlags.CONFIG))} config_file.yaml}} '
-            f'{{{"/".join(make_flags(CliFlags.OPTIONS))}}} '
-            f'{{{"/".join(make_flags(CliFlags.INPUTS))}}} '
-            f'{{{"/".join(make_flags(CliFlags.DEBUG))}}} '
-            f'{{{"/".join(make_flags(CliFlags.PARSED))}}} '
-            f'{{{"/".join(make_flags(CliFlags.STOP))}}} '
-            'param1=value1, …, paramN=valueN'
-        )
+        usage = clean_multiline(f'''
+            python3 {rel_fn_file_path} '
+            {{{"/".join(make_flags(CliFlags.CONFIG))} config_file.yaml}}
+            {{{"/".join(make_flags(CliFlags.OPTIONS))}}}
+            {{{"/".join(make_flags(CliFlags.INPUTS))}}}
+            {{{"/".join(make_flags(CliFlags.DEBUG))}}}
+            {{{"/".join(make_flags(CliFlags.PARSED))}}}
+            {{{"/".join(make_flags(CliFlags.STOP))}}}
+            param1=value1, …, paramN=valueN'
+        ''')
         ap = ArgumentParser(prog=prog, usage=usage)
 
         # add options
@@ -149,7 +145,7 @@ class cli(Generic[CLI]):
         return ap
 
     @classmethod
-    def _wrapped_main_method(cls: Type[CLI],
+    def _wrapped_main_method(cls: Type['cli'],
                              func: Callable,
                              config_node: ConfigNode,
                              print_fn: Optional[Callable] = None,
@@ -228,7 +224,7 @@ class cli(Generic[CLI]):
         # we execute the main method
         return func(parsed_config, **kwargs)
 
-    def __new__(cls,
+    def __new__(cls: Type['cli'],
                 config_node: Type[ConfigNode],
                 print_fn: Optional[Callable] = None,
                 open_fn: Optional[Callable] = None) -> partial:

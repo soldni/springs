@@ -15,7 +15,7 @@ __all__ = ['ConfigParamMultiType',
 class _MultiTypeMeta(type):
     types: Tuple[Type]
 
-    def __subclasscheck__(cls, __subclass: type) -> bool:
+    def __subclasscheck__(cls: Type['_MultiType'], __subclass: type) -> bool:
         return issubclass(__subclass, cls.types)
 
 
