@@ -10,6 +10,15 @@ pip install espresso-config
 Python 3.8 or newer is required.
 
 
+## Why Espresso Config?
+
+There are a million of parsers that can turn a YAML configuration / CLI flags into a configuration file, *e.g.*, [Hydra](https://hydra.cc), [ML Collections](https://github.com/google/ml_collections), so why another one? Espresso Config was designed to meet the following requirements:
+
+1. Support structured configs (*i.e.*, define configurations with classes)
+2. Allow nested classes in configuration
+3. Functions
+
+
 ## Motivating Example
 
 Imagine you want to run the following experiment:

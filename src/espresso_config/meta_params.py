@@ -91,6 +91,13 @@ class ConfigParamMultiType(ConfigParam):
                     {'types': self._types})
 
 
+class _MultiLiteralTypeMeta(_MultiTypeMeta):
+    ...
+
+    def __getitem__(cls, parameters: Sequence[Type[T]]) -> Type[T]:
+        return super().__getitem__(*parameters)
+
+
 class _MultiLiteralType(_MultiType):
     literals: Set[Any]
 
@@ -106,7 +113,8 @@ class _MultiLiteralType(_MultiType):
         return obj
 
 
-class ConfigParamLiteral(ConfigParamMultiType):
+class ConfigParamLiteral(ConfigParamMultiType,
+                         metaclass=_MultiLiteralTypeMeta):
     """A ConfigParam that accept specific values."""
 
     def __init__(self: 'ConfigParamLiteral',
@@ -114,9 +122,6 @@ class ConfigParamLiteral(ConfigParamMultiType):
                  **kwargs: Any) -> None:
         if len(literals) < 1:
             raise ValueError('At least one literal must be provided')
-
-        if len(literals) == 1 and isinstance(literals[0], tuple):
-            literals = literals[0]
 
         self._literals = literals
 
