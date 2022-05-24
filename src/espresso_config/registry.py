@@ -17,7 +17,7 @@ class ConfigRegistry(metaclass=MetaConfigRegistry):
 
     @classmethod
     def add(cls: Type['ConfigRegistry'],
-            config_node_cls: RegistrableType) -> ConfigNode:
+            config_node_cls: RegistrableType) -> RegistrableType:
         is_node_config = (inspect.isclass(config_node_cls) and
                           issubclass(config_node_cls, ConfigNode))
         is_callable = isinstance(config_node_cls, Callable)
@@ -36,7 +36,7 @@ class ConfigRegistry(metaclass=MetaConfigRegistry):
         return config_node_cls
 
     @classmethod
-    def get(cls: Type['ConfigRegistry'], name: str) -> ConfigNode:
+    def get(cls: Type['ConfigRegistry'], name: str) -> RegistrableType:
         if name not in cls.__registry__:
             raise KeyError(f'`{name}` is not in the registry')
         return cls.__registry__[name]

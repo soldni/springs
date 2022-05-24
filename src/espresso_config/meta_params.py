@@ -1,26 +1,29 @@
 import inspect
-from typing import Any, Optional, Sequence, Set, Tuple, Type, Dict
+from typing import Any, Sequence, Set, TypeVar, Type, Dict, Tuple
 
 from .node import (
     ConfigNode,
     ConfigFlexNode,
     ConfigParam,
+    ConfigParamMeta
 )
 
 __all__ = ['ConfigParamMultiType',
            'ConfigParamDictOfConfigNodes',
            'ConfigParamLiteral']
 
+T = TypeVar('T')
 
-class _MultiTypeMeta(type):
+
+class _MultiTypeMeta(ConfigParamMeta):
     types: Tuple[Type]
 
-    def __subclasscheck__(cls: Type['_MultiType'], __subclass: type) -> bool:
+    def __subclasscheck__(cls: '_MultiTypeMeta', __subclass: Type) -> bool:
         return issubclass(__subclass, cls.types)
 
 
 class _MultiType(metaclass=_MultiTypeMeta):
-    types = Tuple[Type]
+    types: Tuple[Type]
 
     def __str__(self: '_MultiType') -> str:
         types_repr = "|".join(repr(t) for t in self.types)
@@ -29,10 +32,10 @@ class _MultiType(metaclass=_MultiTypeMeta):
     def __repr__(self: '_MultiType') -> str:
         return self.__str__()
 
-    def __instancecheck__(cls: Type['_MultiType'], __instance: Any) -> bool:
-        return isinstance(__instance, cls.types)
+    def __instancecheck__(self: '_MultiType', __instance: Type) -> bool:
+        return isinstance(__instance, self.types)
 
-    def __new__(cls: Type['_MultiType'], to_cast: Any) -> types:
+    def __new__(cls: Type['_MultiType'], to_cast: T) -> T:
         if not isinstance(to_cast, cls.types):
             # we try to cast one type at the time
             for t in cls.types:
@@ -57,8 +60,11 @@ class ConfigParamMultiType(ConfigParam):
     """A ConfigParameter that accepts multiple types.
     casting to parameters is resolved in the order they
     are provided."""
+    _types: Tuple[Type]
 
-    def __init__(self: 'ConfigParamMultiType', *target_types: Sequence[Type]):
+    def __init__(self: 'ConfigParamMultiType',
+                 *target_types: Sequence[Type],
+                 **kwargs) -> None:
         # in case target types is an iterable
         target_types = tuple(t for t in target_types)
 
@@ -73,6 +79,7 @@ class ConfigParamMultiType(ConfigParam):
             raise ValueError(msg)
 
         self._types = target_types
+        super().__init__(**kwargs)
 
     @property
     def type(self: 'ConfigParamMultiType') -> Type[_MultiType]:
@@ -85,16 +92,17 @@ class ConfigParamMultiType(ConfigParam):
 
 
 class _MultiLiteralType(_MultiType):
-    literals = Set[Any]
+    literals: Set[Any]
 
-    def __instancecheck__(cls, __instance: Any) -> bool:
+    def __instancecheck__(self, __instance: Any) -> bool:
         return (super().__instancecheck__(__instance) and
-                __instance in cls.literals)
+                __instance in self.literals)
 
     def __new__(cls, *args, **kwargs):
-        obj = super().__new__(*args, **kwargs)
+        obj = super().__new__(cls, *args, **kwargs)
         if obj not in cls.literals:
-            raise ValueError(f'{obj} not in {{{" ".join(cls.literals)}}}')
+            lit_repr = ", ".join(f'`{lit}`' for lit in cls.literals)
+            raise ValueError(f'{obj} not in {{{lit_repr}}}')
         return obj
 
 
@@ -102,25 +110,25 @@ class ConfigParamLiteral(ConfigParamMultiType):
     """A ConfigParam that accept specific values."""
 
     def __init__(self: 'ConfigParamLiteral',
-                 *literals: Sequence[Any],
-                 type_: Optional[Type] = None):
+                 *literals: Any,
+                 **kwargs: Any) -> None:
         if len(literals) < 1:
             raise ValueError('At least one literal must be provided')
 
+        if len(literals) == 1 and isinstance(literals[0], tuple):
+            literals = literals[0]
+
         self._literals = literals
 
-        # in case target types is an iterable
-        target_types = (type_,) or [type(e) for e in literals]
-
-        super().__init__(*target_types)
+        super().__init__(*(type(e) for e in self._literals), **kwargs)
 
     @property
     def type(self: 'ConfigParamLiteral') -> Type[_MultiLiteralType]:
-        target_type_repr = ', '.join(t.__name__ for t in self._types)
+        target_type_repr = ', '.join(str(t) for t in self._types)
         target_lit_repr = f'{{{", ".join(self._literals)}}}'
         return type(
             f'MultiLiteralType({target_type_repr}; {target_lit_repr})',
-            (_MultiLiteralType),
+            (_MultiLiteralType, ),
             {'types': self._types, 'literals': self._literals}
         )
 
@@ -168,8 +176,10 @@ class ConfigParamDictOfConfigNodes(ConfigParam):
     """
 
     def __init__(self: 'ConfigParamDictOfConfigNodes',
-                 node_cls: Type[ConfigNode]):
+                 node_cls: Type[ConfigNode],
+                 **kwargs: Any) -> None:
         self.node_cls = node_cls
+        super().__init__(**kwargs)
 
     @property
     def type(self: 'ConfigParamDictOfConfigNodes') -> Type[_DictOfConfigNodes]:

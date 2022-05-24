@@ -9,7 +9,6 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    List,
     NamedTuple,
     Optional,
     Sequence,
@@ -20,10 +19,11 @@ from typing import (
     Union,
     get_type_hints
 )
+import warnings
 
 from .exceptions import PlaceholderVariableError
 from .parser import YamlParser
-from .utils import MISSING, hybridmethod, OPTIONAL
+from .utils import MISSING, hybrid_method, OPTIONAL
 
 
 # get logger for this file, mostly used for debugging
@@ -48,8 +48,8 @@ class ParameterSpec(NamedTuple):
     by passing the attributes directly."""
 
     name: str
-    default: T
-    type: Type[T]
+    default: Any
+    type: Type[Any]
 
     @classmethod
     def from_string(cls: Type['ParameterSpec'],
@@ -61,22 +61,48 @@ class ParameterSpec(NamedTuple):
         default = YamlParser.load(default)
         return cls(name=name, default=default, type=type(default))
 
-    def to_dict(self: 'ParameterSpec') -> dict:
-        outdict = None
+    def to_dict(self: 'ParameterSpec') -> Optional[dict]:
+        out_dict = None
         for part in self.name.split('.')[::-1]:
-            outdict = {part: outdict} if outdict else {part: self.default}
-        return outdict
+            out_dict = {part: out_dict} if out_dict else {part: self.default}
+        return out_dict
 
 
-class ConfigParam:
-    def __init__(self, target_type):
-        self.type = target_type
+T = TypeVar('T')
 
-    def __repr__(self):
+
+class ConfigParamMeta(type):
+    def __getitem__(cls, *parameters: Type[T]) -> Type[T]:
+        return cls(*parameters, __deprecate_warning__=False)
+
+
+class ConfigParam(metaclass=ConfigParamMeta):
+    """Holds type for a config parameter"""
+
+    type: Type
+
+    def __init__(self: 'ConfigParam',
+                 target_type: Optional[Type] = None,
+                 __deprecate_warning__: bool = True) -> None:
+        if __deprecate_warning__:
+            msg = ("ConfigParam(type) is deprecated, "
+                   "use ConfigParam[type] instead when annotating")
+            warnings.warn(msg)
+
+        if target_type is None:
+            if not hasattr(self, 'type'):
+                raise ValueError("ConfigParam requires a type to be specified")
+        else:
+            # if no `target_type` is passed, we check if the object has
+            # a method `type` which generates a type class at runtime.
+            # if not, we raise an error.
+            self.type = target_type
+
+    def __repr__(self: 'ConfigParam') -> str:
         type_ = getattr(self, 'type', None)
         return f'{type(self).__name__}({repr(type_)})'
 
-    def __str__(self):
+    def __str__(self: 'ConfigParam') -> str:
         type_ = getattr(self, 'type', None)
         return f'{type(self).__name__}({str(type_)})'
 
@@ -89,15 +115,17 @@ class ConfigRegistryReference:
     """Extract registry references and resolve them"""
     def __init__(
         self: 'ConfigRegistryReference',
-        param_name: str = None,
-        registry_ref: str = None,
-        registry_args: Sequence[Any] = None
+        param_name: Optional[str] = None,
+        registry_ref: Optional[str] = None,
+        registry_args: Optional[Sequence[Any]] = None
     ):
         self.param_name = param_name
         self.registry_ref = registry_ref
         self.registry_args = registry_args or []
 
-    def name_as_placeholder_variable(self: 'ConfigRegistryReference'):
+    def name_as_placeholder_variable(
+        self: 'ConfigRegistryReference'
+    ) -> Optional[Sequence[str]]:
         """Split the name (if provided) to be used
         as the path for placeholder variable"""
         if self.param_name:
@@ -128,7 +156,7 @@ class ConfigRegistryReference:
 
     def resolve(self: 'ConfigRegistryReference',
                 *args,
-                node_cls: Sequence['ConfigNode'] = None,
+                node_cls: Optional[Sequence['ConfigNode']] = None,
                 **kwargs) -> Any:
         """Resolves and instantiates a reference to a registry object using
         `param_value`. `node_cls` can be a list of ConfigNode objects to
@@ -177,7 +205,7 @@ class ConfigNodeProps:
     def __init__(self: 'ConfigNodeProps',
                  node: 'ConfigNode',
                  name: str,
-                 parent: 'ConfigNode' = None):
+                 parent: Optional['ConfigNode'] = None):
         self.node = node
         self.config_vars = []
         self.param_keys = set()
@@ -216,7 +244,7 @@ class ConfigNodeProps:
             parent_props = self.get_props(self.parent)
             self.long_name = f'{parent_props.long_name}.{self.short_name}'
 
-    @hybridmethod
+    @hybrid_method
     def get_annotations(
         cls: Type['ConfigNodeProps'],
         node_cls: Type['ConfigNode'],
@@ -235,7 +263,7 @@ class ConfigNodeProps:
                        if isinstance(annotation, ConfigParam)}
         return annotations
 
-    @get_annotations.instancemethod
+    @get_annotations.instance_method
     def get_annotations(
         self: 'ConfigNodeProps',
         traverse: bool = True
@@ -243,7 +271,7 @@ class ConfigNodeProps:
         return type(self).get_annotations(node_cls=self.node_cls,
                                           traverse=traverse)
 
-    @hybridmethod
+    @hybrid_method
     def get_defaults(cls: Type['ConfigNodeProps'],
                      node_cls: Type['ConfigNode']) -> Dict[str, Any]:
         # These are all the default values that have been provided
@@ -282,11 +310,11 @@ class ConfigNodeProps:
 
         return defaults
 
-    @get_defaults.instancemethod
+    @get_defaults.instance_method
     def get_defaults(self: 'ConfigNodeProps') -> Dict[str, Any]:
         return type(self).get_defaults(self.node_cls)
 
-    @hybridmethod
+    @hybrid_method
     def get_subnodes(cls: Type['ConfigNodeProps'],
                      node_cls: Type['ConfigNode']) -> Dict[str, 'ConfigNode']:
         # these are almost all the subnodes for the node; for now, we
@@ -307,11 +335,11 @@ class ConfigNodeProps:
                     if isclass(cls_) and issubclass(cls_, ConfigNode)}
         return subnodes
 
-    @get_subnodes.instancemethod
+    @get_subnodes.instance_method
     def get_subnodes(self: 'ConfigNodeProps') -> Dict[str, 'ConfigNode']:
         return type(self).get_subnodes(self.node_cls)
 
-    @hybridmethod
+    @hybrid_method
     def get_all_cls_members(cls: Type['ConfigNodeProps'],
                             node_cls: Type['ConfigNode']) -> Dict[str, Any]:
         all_non_routines = getmembers(node_cls, lambda a: not(isroutine(a)))
@@ -324,11 +352,11 @@ class ConfigNodeProps:
                    if not invalid_name_fn(name)}
         return members
 
-    @get_all_cls_members.instancemethod
+    @get_all_cls_members.instance_method
     def get_all_cls_members(self: 'ConfigNodeProps') -> Dict[str, Any]:
         return type(self).get_all_cls_members(self.node_cls)
 
-    @hybridmethod
+    @hybrid_method
     def get_all_parameters(
         cls: Type['ConfigNodeProps'],
         node_cls: Type['ConfigNode']
@@ -353,13 +381,15 @@ class ConfigNodeProps:
             for param_spec in cls.get_all_parameters(subnode_cls):
                 all_parameters.append(
                     ParameterSpec(name=f'{subnode_name}.{param_spec.name}',
-                                  type=param_spec.type,
-                                  default=param_spec.default)
+                                   type=param_spec.type,
+                                   default=param_spec.default)
                 )
         return all_parameters
 
-    @get_all_parameters.instancemethod
-    def get_all_parameters(self: 'ConfigNodeProps') -> Sequence[ParameterSpec]:
+    @get_all_parameters.instance_method
+    def get_all_parameters(
+        self: 'ConfigNodeProps'
+    ) -> Sequence[ParameterSpec]:
         return type(self).get_all_parameters(self.node_cls)
 
     def assign_param(self, name: str, value: Any, annotation: Any = None):
@@ -406,7 +436,7 @@ class ConfigNodeProps:
         else:
             return self.get_props(self.parent).get_root()
 
-    def get_children(self: 'ConfigNode',
+    def get_children(self: 'ConfigNodeProps',
                      recursive: bool = False) -> Iterable['ConfigNode']:
         """Get a iterable of all the subnodes to this config node"""
         for key, value in sorted(self.node):
@@ -471,7 +501,7 @@ class ConfigNodeProps:
                     msg += f' Hint: you might want to use {type(reg_entry)}.'
                     raise ValueError(msg)
 
-    @hybridmethod
+    @hybrid_method
     def merge_nodes(cls: Type['ConfigNodeProps'],
                     node: 'ConfigNode',
                     other_node: 'ConfigNode',
@@ -495,7 +525,7 @@ class ConfigNodeProps:
 
         return node_cls(config_values, __flex_node__=flex)
 
-    @merge_nodes.instancemethod
+    @merge_nodes.instance_method
     def merge_nodes(self: 'ConfigNodeProps',
                     other_node: 'ConfigNode',
                     flex: bool = False) -> 'ConfigNode':
@@ -510,9 +540,9 @@ class ConfigNode:
     def __init__(
         self: 'ConfigNode',
         config: Optional[Union[Dict[str, Any], 'ConfigNode']] = None,
-        __parent__: 'ConfigNode' = None,
+        __parent__: Optional['ConfigNode'] = None,
         __flex_node__: bool = False,
-        __name__: str = None,
+        __name__: Optional[str] = None,
         **kwargs: Dict[str, Any],
     ) -> None:
         # Parsing comes in 5 phases, each one is in a separate code block!
@@ -531,10 +561,10 @@ class ConfigNode:
         # Create a property object for this node; the object will bind
         # itself to it
         node_props = ConfigNodeProps(node=self,
-                                     name=__name__,
-                                     parent=__parent__)
+                                      name=__name__,
+                                      parent=__parent__)
 
-        # get annnotations, defaults, and subnodes. Will be used to look up the
+        # get annotations, defaults, and subnodes. Will be used to look up the
         # right types for values, get their default value, and instantiate any
         # subnode to this config node.
         annotations = node_props.get_annotations()
@@ -686,7 +716,7 @@ class ConfigNode:
 
                 if isclass(param_type) \
                         and issubclass(param_type, ConfigNode):
-                    # CASE 3.1: sometimes the type of a paramemter is
+                    # CASE 3.1: sometimes the type of a parameter is
                     #           ConfigNode or a subclass of it, making
                     #           necessary to pass some extra parameters to
                     #           the constructor instead of just `param_value`.
@@ -755,7 +785,7 @@ class ConfigNode:
             elif __flex_node__:
                 # CASE 5: I don't recognize this key, but I'm in flex config
                 #         mode so I'll just add it to this node object
-                #         (config_value is already asssigned, that's why we
+                #         (config_value is already assigned, that's why we
                 #         just pass here).
                 debug_call('5.unrecognized_but_flexible')
             else:
@@ -793,7 +823,7 @@ class ConfigNode:
                 LOGGER.debug(msg)
             elif is_missing_default:
                 # This parameter was not overwritten by the configuration
-                # provided to this __init__ method; however, the paramer
+                # provided to this __init__ method; however, the parameter
                 # doesn't have a default, so we need to raise an error.
                 msg = (f'parameter "{param_name}" is '
                        f'missing for "{node_props.cls_name}"')
@@ -808,7 +838,7 @@ class ConfigNode:
                 param_value = deepcopy(defaults[param_name])
 
                 # Like before, we check if this is a placeholder var; if
-                # it is, we need to instantitate it and use it as parameter
+                # it is, we need to instantiate it and use it as parameter
                 # value so it can be resolved later. We also add it to the
                 # registry of all the placeholder variables, which is
                 # in the node properties.
@@ -917,7 +947,7 @@ class ConfigNode:
 
 @dataclass
 class VarMatch:
-    path: Sequence[str]
+    path: Optional[Sequence[str]]
     match: str
     registry: ConfigRegistryReference = field(
         default_factory=ConfigRegistryReference
@@ -988,7 +1018,7 @@ class ConfigPlaceholderVar:
         while len(self.placeholder_vars) > 0:
             var_match: VarMatch = self.placeholder_vars.pop(0)
 
-            if var_match.path:
+            if var_match.path is not None:
                 # this reduce function traverses the config from the
                 # root node to get to the variable that we want
                 # to use for substitution
@@ -1083,15 +1113,16 @@ class ConfigPlaceholderVar:
     def contains(cls: Type['ConfigPlaceholderVar'], value: Any) -> bool:
         """Returns True if value has variable (${...})
            somewhere, False otherwise"""
-        return (isinstance(value, str) and
-                re.findall(CONFIG_PLACEHOLDER_VAR_TEMPLATE, value))
+        if isinstance(value, str):
+            return len(re.findall(CONFIG_PLACEHOLDER_VAR_TEMPLATE, value)) > 0
+        return False
 
 
 class ConfigFlexNode(ConfigNode):
     """Just like a ConfigNode, except it allows for additional
     parameters other than the ones provided with annotations"""
     def __init__(self: 'ConfigNode',
-                 *args: List[Any],
+                 *args,
                  __flex_node__: bool = True,
-                 **kwargs: Dict[str, Any]) -> None:
+                 **kwargs) -> None:
         super().__init__(*args, __flex_node__=True, **kwargs)

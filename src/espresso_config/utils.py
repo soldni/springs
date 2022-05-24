@@ -87,7 +87,7 @@ def mkdir_p(path):
     return path
 
 
-class hybridmethod:
+class hybrid_method:
     """A decorator that allows overloading a method depending
     on whether it is a class method or instance method. From
     https://stackoverflow.com/a/28238047"""
@@ -101,10 +101,10 @@ class hybridmethod:
             getattr(f_class, '__isabstractmethod__', False)
         )
 
-    def classmethod(self, f_class):
+    def class_method(self, f_class):
         return type(self)(f_class, self.f_instance, None)
 
-    def instancemethod(self, f_instance):
+    def instance_method(self, f_instance):
         return type(self)(self.f_class, f_instance, self.__doc__)
 
     def __get__(self, instance, cls):

@@ -6,6 +6,8 @@ import itertools
 
 from typing import Any, Callable, Dict, Sequence, Type, Union
 
+from yaml import warnings
+
 from .exceptions import ConfigInstantiateError
 from .utils import clean_multiline
 from .parser import YamlParser
@@ -125,11 +127,11 @@ class TargetType:
         return self.callable(*args, **kwargs)
 
 
-class instantiate:
+class init:
     TARGET: str = '_target_'
 
     @classmethod
-    def callable(cls: Type['instantiate'],
+    def callable(cls: Type['init'],
                  config: Union[Dict[str, Any], ConfigNode]) -> Callable:
 
         if not isinstance(config, ConfigNode):
@@ -153,7 +155,7 @@ class instantiate:
 
     @classmethod
     def later(
-        cls: Type['instantiate'],
+        cls: Type['init'],
         config: Union[Dict[str, Any], ConfigNode, None] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
@@ -194,7 +196,7 @@ class instantiate:
 
     @classmethod
     def now(
-        cls: Type['instantiate'],
+        cls: Type['init'],
         config: Union[ConfigNode, dict] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
@@ -206,8 +208,30 @@ class instantiate:
 
         return cls.later(config=config, _recursive_=_recursive_, **kwargs)()
 
-    def __new__(cls: Type['instantiate'],
+    def __new__(cls: Type['init'],
                 *args: Sequence[Any],
                 **kwargs: Dict[str, Any]) -> object:
-        """Alias for `instantitate.now`"""
+        """Alias for `init.now`"""
         return cls.now(*args, **kwargs)
+
+
+class instantiate(init):
+
+    @staticmethod
+    def _deprecation_warning() -> None:
+        raise warnings.warn('`instantiate` is deprecated, use `init` instead')
+
+    @classmethod
+    def now(cls, *args, **kwargs):
+        cls._deprecation_warning()
+        return super().now(*args, **kwargs)
+
+    @classmethod
+    def later(cls, *args, **kwargs):
+        cls._deprecation_warning()
+        return super().later(*args, **kwargs)
+
+    @classmethod
+    def callable(cls, *args, **kwargs):
+        cls._deprecation_warning()
+        return super().callable(*args, **kwargs)

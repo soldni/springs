@@ -1,61 +1,31 @@
 import os
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser
 from enum import Enum
 from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
-from typing import Any, Callable, Optional, Sequence, Type, Union
+from typing import Any, Callable, Optional, Sequence, Type
 
 from .functional import config_to_yaml
 from .instantiate import InitLater
 from .node import ConfigNode, ConfigNodeProps, ParameterSpec
 from .parser import YamlParser
-from .utils import (MISSING, PrintUtils, merge_nested_dicts, read_raw_file,
+from .utils import (PrintUtils, merge_nested_dicts, read_raw_file,
                     resolve_path, clean_multiline)
 
 
 class CliFlags(Enum):
     CONFIG = 'config'
     PARSED = 'parsed'
-    STOP = 'stop'
-    INPUTS = 'input'
+    QUIET = 'quiet'
+    INPUTS = 'inputs'
     OPTIONS = 'options'
     DEBUG = 'debug'
 
 
 def make_flags(opt_name: CliFlags) -> Sequence[str]:
+    """Simple helper to create a list of flags for an
+    option based on its name"""
     return f'-{opt_name.value[0]}', f'--{opt_name.value}'
-
-
-class PrintingSteps:
-    def __init__(self: 'PrintingSteps', ns: Union[Namespace, dict]):
-
-        # turn the namespace to a dictionary
-        ns = vars(ns) if isinstance(ns, Namespace) else ns
-
-        # ignoring whatever is of type missing, i.e. was not provided
-        # as well as the configuration path
-        cli_flags = {k: v for k, v in ns.items()
-                     if (v != MISSING and k != CliFlags.CONFIG.value)}
-
-        # default if none are provided
-        cli_flags = (cli_flags or {CliFlags.PARSED: True,
-                                   CliFlags.STOP: False,
-                                   CliFlags.DEBUG: False})
-
-        # convert to Enum entries
-        self.steps = {CliFlags(stp) for stp, flg in cli_flags.items() if flg}
-
-    def do_step(self: 'PrintingSteps', step_name: CliFlags) -> bool:
-        if step_name in self.steps:
-            self.steps.remove(step_name)
-            return True
-        return False
-
-    def has_more_steps(self: 'PrintingSteps') -> bool:
-        return self.steps != {CliFlags.STOP}
-
-    def will_print(self: 'PrintingSteps') -> bool:
-        return self.steps and self.has_more_steps()
 
 
 class cli:
@@ -88,12 +58,17 @@ class cli:
     def _make_argument_parser(cls: Type['cli'],
                               func: Callable,
                               config_node: ConfigNode) -> ArgumentParser:
-        # setup argparse
-        prog = f'Parser for configuration {config_node.__name__}'
+        """Sets up argument parser ahead of running the CLI. This includes
+        creating a help message, and adding a series of flags."""
+
+        # we find the path to the script we are decorating with the
+        # cli so that we can display that to the user.
         current_dir = resolve_path(os.getcwd()) + '/'
         path_to_fn_file = resolve_path(getfile(func))
         rel_fn_file_path = path_to_fn_file.replace(current_dir, '')
 
+        # Program name and usage printed here.
+        prog = f'Parser for configuration {config_node.__name__}'
         usage = clean_multiline(f'''
             python3 {rel_fn_file_path} '
             {{{"/".join(make_flags(CliFlags.CONFIG))} config_file.yaml}}
@@ -101,7 +76,7 @@ class cli:
             {{{"/".join(make_flags(CliFlags.INPUTS))}}}
             {{{"/".join(make_flags(CliFlags.DEBUG))}}}
             {{{"/".join(make_flags(CliFlags.PARSED))}}}
-            {{{"/".join(make_flags(CliFlags.STOP))}}}
+            {{{"/".join(make_flags(CliFlags.QUIET))}}}
             param1=value1, …, paramN=valueN'
         ''')
         ap = ArgumentParser(prog=prog, usage=usage)
@@ -116,31 +91,26 @@ class cli:
         msg = 'Print all default options and CLI flags.'
         ap.add_argument(*make_flags(CliFlags.OPTIONS),
                         action='store_true',
-                        default=MISSING,
                         help=msg)
 
         msg = 'Print the input configuration.'
         ap.add_argument(*make_flags(CliFlags.INPUTS),
                         action='store_true',
-                        default=MISSING,
                         help=msg)
 
         msg = 'Print the parsed configuration.'
         ap.add_argument(*make_flags(CliFlags.PARSED),
                         action='store_true',
-                        default=MISSING,
                         help=msg)
 
         msg = 'Enter debug mode by setting global logging to DEBUG.'
         ap.add_argument(*make_flags(CliFlags.DEBUG),
                         action='store_true',
-                        default=MISSING,
                         help=msg)
 
-        msg = 'If provided, it stops running before running the script.'
-        ap.add_argument(*make_flags(CliFlags.STOP),
+        msg = 'If provided, it does not print the configuration when running.'
+        ap.add_argument(*make_flags(CliFlags.QUIET),
                         action='store_true',
-                        default=MISSING,
                         help=msg)
         return ap
 
@@ -162,7 +132,7 @@ class cli:
         opts, _args = ap.parse_known_args()
 
         # set some default options for when no options are provided
-        printing_steps = PrintingSteps(opts)
+        # printing_steps = PrintingSteps(opts)
 
         # setup debug
         if opts.debug:
@@ -173,18 +143,20 @@ class cli:
         # Setup an utility to deal with printing
         pu = PrintUtils(print_fn=print_fn)
 
-        # Print default options if requested py the user
-        if printing_steps.do_step(CliFlags.OPTIONS):
+        # We don't run the main program if the user
+        # has requested to print the any of the config.
+        do_no_run = (opts.options or opts.inputs or opts.parsed)
 
+        # Print default options if requested py the user
+        if opts.options:
             params = ConfigNodeProps.get_all_parameters(config_node)
 
-            cli_opts_repr = ('CLI OPTIONS:', ) + tuple(
+            cli_opts_repr = ('OPTS/CLI FLAG:', ) + tuple(
                 f'{p.name}: {p.type.__name__} = ' +
                 # represent empty string as ''
                 (str(p.default) if p.default != '' else "''")
                 for p in params
             )
-
             pu.print(*cli_opts_repr, level_up=1)
 
         # reads and parse teh command line and file configs (if provided)
@@ -201,28 +173,29 @@ class cli:
         config = merge_nested_dicts(file_config, cli_config)
 
         # print both configs if requested
-        if printing_steps.do_step(CliFlags.INPUTS):
-            pu.print('INPUT/COMMAND LINE:', cli_config)
-            pu.print('INPUT/CONFIG FILE:', file_config)
+        if opts.inputs:
+            pu.print('INPUT/CLI ARGS:', cli_config)
+            pu.print('INPUT/CFG FILE:', file_config)
 
-        if not printing_steps.has_more_steps():
-            # nothing more to do, let's not risk
-            # parsing, which might cause an error!
+        if do_no_run and not opts.parsed:
+            # if the user hasn't requested to print the parsed config
+            # and we are not running the main program, we can exit here.
             return InitLater.no_op()
 
         # load configuration with node parsers
         parsed_config = config_node(config)
 
         # print it if requested
-        if printing_steps.do_step(CliFlags.PARSED):
-            pu.print('PARSED CONFIG:', parsed_config, yaml_fn=config_to_yaml)
+        if not(opts.quiet) or opts.parsed:
+            pu.print('PARSE/ALL CFG:', parsed_config, yaml_fn=config_to_yaml)
 
-        if printing_steps.do_step(CliFlags.STOP):
-            # this will do nothing when called
+        if do_no_run:
+            # we are not running because the user has requested to print
+            # either the options, inputs, or parsed config.
             return InitLater.no_op()
-
-        # we execute the main method
-        return func(parsed_config, **kwargs)
+        else:
+            # we execute the main method and pass the parsed config to it
+            return func(parsed_config, **kwargs)
 
     def __new__(cls: Type['cli'],
                 config_node: Type[ConfigNode],
