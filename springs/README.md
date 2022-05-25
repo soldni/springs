@@ -93,7 +93,45 @@ Easy, right?
 
 ### Initializing Object from Configurations
 
-Guide coming soon!
+Sometimes a configuration contains all the necessary information to
+instantiate an object from it.
+Springs supports this use case, and it is as easy as providing a `_target_` node in a configuration:
+
+```python
+
+@sp.dataclass
+class ModelConfig:
+    _target_: str = \
+        'transformers.AutoModelForSequenceClassification.from_pretrained'
+    pretrained_model_name_or_path: str = 'bert-base-uncased'
+    num_classes: int = 2
+```
+
+In your experiment code, run:
+
+```python
+
+def run_model(model_config: ModelConfig):
+    ...
+    model = sp.init.now(config)
+```
+
+if, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
+
+
+```python
+
+import transformers
+
+@sp.dataclass
+class ModelConfig:
+    _target_: str = sp.Target.to_string(transformers.
+                                        AutoModelForSequenceClassification.
+                                        from_pretrained)
+    pretrained_model_name_or_path: str = 'bert-base-uncased'
+    num_classes: int = 2
+```
+
 
 ### Resolvers
 
