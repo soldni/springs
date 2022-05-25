@@ -1,8 +1,8 @@
 import logging
+import warnings
 from multiprocessing import current_process
 from pathlib import Path
 from typing import Optional, Type, Union
-import warnings
 
 
 class configure_logging:

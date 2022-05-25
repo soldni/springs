@@ -1,11 +1,11 @@
 import copy
-from dataclasses import dataclass, is_dataclass, field      # noqa: F401
-from typing import (Callable, Iterator, Optional, Protocol, Dict,
-                    Type, Union, Any, TypeVar)
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, field, is_dataclass  # noqa: F401
+from pathlib import Path
+from typing import (Any, Callable, Dict, Iterator, Optional, Protocol,
+                    Sequence, Type, TypeVar, Union)
 
-from omegaconf import DictConfig, OmegaConf, MISSING, open_dict
-
-from .utils import NoneCtx
+from omegaconf import MISSING, DictConfig, OmegaConf, open_dict
 
 # for return type
 RT = TypeVar('RT')
@@ -19,6 +19,9 @@ class DataClass(Protocol):
         return is_dataclass(__instance)
 
 
+ConfigType = Union[DictConfig, Dict[str, Any], Type[DataClass], str]
+
+
 @dataclass
 class ParamSpec:
     name: str
@@ -27,12 +30,11 @@ class ParamSpec:
     node: Optional[DictConfig]
 
 
-def traverse(config_node: DictConfig) -> Iterator[ParamSpec]:
+def traverse(config_node: ConfigType) -> Iterator[ParamSpec]:
     """Returns all keys for a config node"""
-    # if isinstance(config_node, DictConfig):
-    #     yield from traverse(OmegaConf.to_container(config_node))
-    # print(config_node)
-    # else:
+
+    config_node = cast(config_node)
+
     for key in config_node.keys():
         if OmegaConf.is_missing(config_node, key):
             value = MISSING
@@ -54,7 +56,7 @@ def traverse(config_node: DictConfig) -> Iterator[ParamSpec]:
                             node=config_node)
 
 
-def validate(config_node: Any) -> DictConfig:
+def validate(config_node: ConfigType) -> DictConfig:
     """Check if all attributes are resolve and not missing"""
 
     if not isinstance(config_node, DictConfig):
@@ -75,11 +77,62 @@ def validate(config_node: Any) -> DictConfig:
     return config_node
 
 
-def config_from_dict(
-    config: Union[DictConfig, Dict[str, Any], None]
+def cast(config: ConfigType):
+    if is_dataclass(config):
+        return from_dataclass(config)   # type: ignore
+    elif isinstance(config, dict):
+        return from_dict(config)
+    elif isinstance(config, str):
+        return from_string(config)
+    elif isinstance(config, DictConfig):
+        return config
+    else:
+        raise TypeError(f'Cannot cast `{type(config)}` to DictConfig')
+
+
+def from_options(opts: Sequence[str]) -> DictConfig:
+    config = OmegaConf.from_dotlist(list(opts))
+    if not isinstance(config, DictConfig):
+        raise TypeError(f"input is not a sequence of strings, but `{opts}")
+    return config
+
+
+def from_dataclass(config: Any) -> DictConfig:
+    if not(is_dataclass(config)):
+        msg = '`config_node` must be be decorated as a dataclass'
+        raise ValueError(msg)
+    config = OmegaConf.structured(config)
+    if not isinstance(config, DictConfig):
+        raise TypeError(f'Cannot create dict config from `{config}`')
+
+    return config
+
+
+def from_file(path: Optional[Path] = None) -> DictConfig:
+    if path is not None:
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f'Cannot file configuration at {path}')
+        config = OmegaConf.load(str(path))
+    else:
+        config = from_dict(None)
+
+    if not isinstance(config, DictConfig):
+        raise ValueError(f'Config loaded from {path} is not a DictConfig!')
+
+    return config
+
+
+def from_none() -> DictConfig:
+    """Returns an empty dict config"""
+    return OmegaConf.create()
+
+
+def from_dict(
+    config: Optional[Union[DictConfig, Dict[str, Any]]] = None
 ) -> DictConfig:
     if config is None:
-        new_config = OmegaConf.create()
+        new_config = from_none()
     elif not isinstance(config, DictConfig):
         try:
             new_config = OmegaConf.create(config)
@@ -95,28 +148,33 @@ def config_from_dict(
     return new_config
 
 
-def config_from_string(
+def from_string(
     config: str,
     config_cls: Optional[Type[DataClass]] = None,
-    strict_input: bool = False
+    strict: bool = False
 ) -> DictConfig:
 
     parsed_config = OmegaConf.create(config)
+    if not isinstance(parsed_config, DictConfig):
+        raise ValueError(f'Config `{config}` is not a DictConfig!')
 
     if config_cls is not None:
         base_config = OmegaConf.structured(config_cls)
-        with (NoneCtx() if strict_input else open_dict(base_config)):
-            parsed_config = OmegaConf.merge(base_config, parsed_config)
+        parsed_config = merge(base_config, parsed_config, strict=strict)
 
-    if isinstance(parsed_config, DictConfig):
-        return parsed_config
-    else:
+    if not isinstance(parsed_config, DictConfig):
         raise TypeError(f'Could not create config from string `{config}`')
+    return parsed_config
 
 
 def to_yaml(config: Union[DictConfig, Dict[str, Any]]) -> str:
-    config = config_from_dict(config)
+    config = from_dict(config)
     return OmegaConf.to_yaml(config)
+
+
+def to_dict(config: Union[DictConfig, Dict[str, Any]]) -> Dict[str, Any]:
+    config = from_dict(config)
+    return OmegaConf.to_container(config)
 
 
 def register(
@@ -132,3 +190,25 @@ def register(
         return func
 
     return _register
+
+
+@contextmanager
+def editable(*configs: ConfigType, enable: bool) -> Iterator[bool]:
+    try:
+        with ExitStack() as stack:
+            if enable:
+                [stack.enter_context(open_dict(cast(c))) for c in configs]
+        yield enable
+
+    finally:
+        pass
+
+
+def merge(*configs: ConfigType, strict: bool = False) -> DictConfig:
+    with editable(*configs, enable=not(strict)):
+        merged_config = OmegaConf.merge(*configs)
+
+    if not isinstance(merged_config, DictConfig):
+        raise TypeError(f'Merged config {merged_config} is not a DictConfig!')
+
+    return merged_config

@@ -5,7 +5,6 @@ Just like the springs inside an Omega watch, they help you move with your experi
 
 Springs overlaps in functionality with [Hydra](https://hydra.cc/), but without all the unnecessary boilerplate.
 
-
 ## Philosophy
 
 OmegaConf supports creating configurations in all sorts of manners, but we believe that there are benefits into defining configuration from structured objects, namely dataclass.
@@ -15,12 +14,11 @@ Let's look at an example. Imagine we are building a configuration for a machine 
 We start by writing the following structure configuration
 
 ```python
-
 import springs as sp
 
 @sp.dataclass                   # alias to dataclasses.dataclass
 class DataConfig:
-    path: str = sp.MISSING      # alias to omegaconf.MISSING
+    path: str = sp.MISSING      # alias to dataclasses.MISSING
     split: str = 'train'
 
 @sp.dataclass
@@ -38,8 +36,6 @@ class Config:                   # this is our overall config
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
     exp: ExperimentConfig = ExperimentConfig()
-
-
 ```
 
 Note how, in matching with OmegaConf syntax, we use `MISSING` to indicate any value that has no default and should be provided at runtime.
@@ -47,7 +43,6 @@ Note how, in matching with OmegaConf syntax, we use `MISSING` to indicate any va
 If we want to use this configuration with a function that actually runs this experiment, we can use `sp.cli` as follows:
 
 ```python
-
 @sp.cli(Config)
 def main(config: Config)
     print(config)           # this will print the configuration like a dict
@@ -98,7 +93,6 @@ instantiate an object from it.
 Springs supports this use case, and it is as easy as providing a `_target_` node in a configuration:
 
 ```python
-
 @sp.dataclass
 class ModelConfig:
     _target_: str = \
@@ -110,7 +104,6 @@ class ModelConfig:
 In your experiment code, run:
 
 ```python
-
 def run_model(model_config: ModelConfig):
     ...
     model = sp.init.now(config)
@@ -118,9 +111,7 @@ def run_model(model_config: ModelConfig):
 
 if, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
 
-
 ```python
-
 import transformers
 
 @sp.dataclass
@@ -132,16 +123,15 @@ class ModelConfig:
     num_classes: int = 2
 ```
 
-
 ### Resolvers
 
 Guide coming soon!
 
-
 ## Tips and Tricks
 
+This section includes a bunch of tips and tricks for working with OmegaConf and YAML.
 
-### Repeating nodes in YAML input
+### Tip 1: Repeating nodes in YAML input
 
 In setting up YAML configuration files for ML experiments, it is common to
 have almost-repeated sections.

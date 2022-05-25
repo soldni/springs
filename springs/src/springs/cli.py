@@ -1,17 +1,18 @@
-from dataclasses import is_dataclass
 import os
 from argparse import ArgumentParser
+from dataclasses import is_dataclass
 from enum import Enum
 from functools import partial
 from inspect import getfile, getfullargspec, isclass
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence, Type
 
-from omegaconf import DictConfig, OmegaConf, open_dict
+from omegaconf import DictConfig
 
-from .core import traverse, validate
-from .utils import NoneCtx, clean_multiline, PrintUtils
+from .core import (from_dataclass, from_file, from_options, merge, traverse,
+                   validate)
 from .init import InitLater
+from .utils import PrintUtils, clean_multiline
 
 
 class CliFlags(Enum):
@@ -166,17 +167,11 @@ class cli:
             )
             pu.print(*cli_opts_repr, level_up=1)
 
-        cli_config = OmegaConf.from_dotlist(leftover_args)
-        if not isinstance(cli_config, DictConfig):
-            raise TypeError("Command-line overrides must key=value pairs.")
-
-        file_config = (OmegaConf.load(opts.config) if opts.config
-                       else OmegaConf.create())
-        if not isinstance(file_config, DictConfig):
-            raise TypeError(f"YAML file `{opts.config}` must be a dictionary")
-
-        # cli_config takes precedence over file_config
-        input_config = OmegaConf.merge(file_config, cli_config)
+        # load cli config and file config;
+        # when merging, cli_config takes precedence over file_config
+        cli_config = from_options(leftover_args)
+        file_config = from_file(opts.config)
+        input_config = merge(file_config, cli_config)
 
         # print both configs if requested
         if opts.inputs:
@@ -189,8 +184,7 @@ class cli:
             return InitLater.no_op()
 
         # load configuration with node parsers
-        with (NoneCtx() if strict_input else open_dict(config_node)):
-            parsed_config = OmegaConf.merge(config_node, input_config)
+        parsed_config = merge(config_node, input_config, strict=strict_input)
 
         # check if all parameters are provided/resolved
         parsed_config = validate(parsed_config)
@@ -208,7 +202,7 @@ class cli:
             return func(parsed_config, **kwargs)
 
     def __new__(cls: Type['cli'],
-                config_node_cls: Type,
+                config_node_cls: Any,
                 strict_input: bool = False,
                 print_fn: Optional[Callable] = None) -> Callable:
 
@@ -216,7 +210,7 @@ class cli:
             msg = '`config_node` must be be decorated as a dataclass'
             raise ValueError(msg)
 
-        config_node = OmegaConf.structured(config_node_cls)
+        config_node = from_dataclass(config_node_cls)
         name = config_node_cls.__name__
 
         def wrapper(func: Callable) -> Callable:
@@ -226,5 +220,4 @@ class cli:
                            strict_input=strict_input,
                            config_node=config_node,
                            print_fn=print_fn)
-
         return wrapper

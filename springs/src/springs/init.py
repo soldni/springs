@@ -3,16 +3,12 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-
 from typing import Any, Callable, Dict, Optional, Type, Union
 
-# from .exceptions import ConfigInstantiateError
-from .utils import clean_multiline
-from .core import config_from_dict
-# from .parser import YamlParser
-# from .node import ConfigNode, ConfigFlexNode
-
 from omegaconf import DictConfig, OmegaConf
+
+from .core import from_dict
+from .utils import clean_multiline
 
 
 class InitLater(functools.partial):
@@ -109,7 +105,7 @@ class init:
     def callable(cls: Type['init'],
                  config: Union[DictConfig, Dict[str, Any]]) -> Callable:
 
-        config = config_from_dict(config)
+        config = from_dict(config)
 
         try:
             target: str = config[cls.TARGET]
@@ -132,11 +128,11 @@ class init:
         if config is None:
             return InitLater.no_op()
 
-        config_node = config_from_dict(config)
+        config_node = from_dict(config)
 
         if len(kwargs) > 0:
             config_node = OmegaConf.merge(
-                config_node, config_from_dict(kwargs)
+                config_node, from_dict(kwargs)
             )
 
         if cls.TARGET not in config_node:

@@ -17,11 +17,11 @@ CURRENT_DIR=$(pwd)
 # fail if any command fails
 set -ex
 
-# goes to the springs directory
-cd "${SCRIPT_DIR}/../springs"
-
 # upgrade twine as needed
 python3 -m pip install --upgrade build twine
+
+# moves up to root dir
+cd "${SCRIPT_DIR}/.."
 
 # build and upload to PyPi
 python3 -m build
@@ -29,7 +29,6 @@ python3 -m twine upload dist/*
 
 # no need to keep all previous builds
 rm -rf dist/*
-rm -rf build/*
 
 # go back to original dir
 cd ${CURRENT_DIR}

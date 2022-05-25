@@ -1,26 +1,17 @@
-from contextlib import contextmanager
 import re
 import shutil
 from dataclasses import dataclass, field
 from textwrap import dedent
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Optional, Union
 
-from omegaconf import DictConfig, OmegaConf
 import yaml
+from omegaconf import DictConfig, OmegaConf
 
 
 def clean_multiline(string: str) -> str:
     string = dedent(string.strip())
     string = re.sub(r'\s*\n\s*', ' ', string)
     return string
-
-
-@contextmanager     # type: ignore
-def NoneCtx() -> Iterable[None]:
-    try:
-        yield None
-    finally:
-        ...
 
 
 @dataclass

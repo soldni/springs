@@ -1,20 +1,46 @@
-from .init import init, Target
 from .cli import cli
 from .core import (
-    traverse,
-    to_yaml,
-    config_from_dict,
-    validate,
     MISSING,
-    config_from_string,
-    register,
+
+    cast,
     dataclass,
-    field
+    editable,
+    field,
+    from_dict,
+    from_file,
+    from_none,
+    from_options,
+    from_string,
+    merge,
+    register,
+    to_dict,
+    to_yaml,
+    traverse,
+    validate
 )
+from .init import Target, init
 from .logging import configure_logging
 
+
 __all__ = [
-    'init', 'Target', 'cli', 'traverse', 'to_yaml', 'config_from_dict',
-    'validate', 'MISSING', 'configure_logging', 'config_from_string',
-    'register', 'dataclass', 'field'
+    'cast',
+    'cli',
+    'configure_logging',
+    'dataclass',
+    'editable',
+    'field',
+    'from_dict',
+    'from_file',
+    'from_none',
+    'from_options',
+    'from_string',
+    'init',
+    'merge',
+    'MISSING',
+    'register',
+    'Target',
+    'to_dict',
+    'to_yaml',
+    'traverse',
+    'validate',
 ]
