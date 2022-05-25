@@ -26,7 +26,7 @@ def __is_type__(*args, **_) -> str:
     ```
     """
     if len(args) < 2:
-        msg = ('__is_type__ expects two imputs, '
+        msg = ('__is_type__ expects two inputs, '
                'e.g. ${path.to_node@__is_type__@target_type}'
                'or key@__is_type__@target_type: ... .')
         raise ValueError(msg)
