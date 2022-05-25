@@ -1,11 +1,12 @@
 import copy
-from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field, is_dataclass  # noqa: F401
 from pathlib import Path
 from typing import (Any, Callable, Dict, Iterator, Optional, Protocol,
                     Sequence, Type, TypeVar, Union)
 
-from omegaconf import MISSING, DictConfig, OmegaConf, open_dict
+from omegaconf import MISSING, DictConfig, OmegaConf
+from omegaconf.basecontainer import BaseContainer
+
 
 # for return type
 RT = TypeVar('RT')
@@ -77,7 +78,7 @@ def validate(config_node: ConfigType) -> DictConfig:
     return config_node
 
 
-def cast(config: ConfigType):
+def cast(config: Any) -> DictConfig:
     if is_dataclass(config):
         return from_dataclass(config)   # type: ignore
     elif isinstance(config, dict):
@@ -151,7 +152,6 @@ def from_dict(
 def from_string(
     config: str,
     config_cls: Optional[Type[DataClass]] = None,
-    strict: bool = False
 ) -> DictConfig:
 
     parsed_config = OmegaConf.create(config)
@@ -160,7 +160,7 @@ def from_string(
 
     if config_cls is not None:
         base_config = OmegaConf.structured(config_cls)
-        parsed_config = merge(base_config, parsed_config, strict=strict)
+        parsed_config = merge(base_config, parsed_config)
 
     if not isinstance(parsed_config, DictConfig):
         raise TypeError(f'Could not create config from string `{config}`')
@@ -192,23 +192,20 @@ def register(
     return _register
 
 
-@contextmanager
-def editable(*configs: ConfigType, enable: bool) -> Iterator[bool]:
-    try:
-        with ExitStack() as stack:
-            if enable:
-                [stack.enter_context(open_dict(cast(c))) for c in configs]
-        yield enable
-
-    finally:
-        pass
+def all_resolvers() -> Sequence[str]:
+    return [str(k) for k in BaseContainer._resolvers.keys()]
 
 
-def merge(*configs: ConfigType, strict: bool = False) -> DictConfig:
-    with editable(*configs, enable=not(strict)):
-        merged_config = OmegaConf.merge(*configs)
+def merge(*configs: ConfigType) -> DictConfig:
+    if not configs:
+        # no configs were provided, return an empty config
+        return from_none()
 
-    if not isinstance(merged_config, DictConfig):
-        raise TypeError(f'Merged config {merged_config} is not a DictConfig!')
+    # make sure all configs are DictConfigs
+    merged_config, *other_configs = map(cast, configs)
+
+    for other_config in other_configs:
+        merged_config = cast(OmegaConf.merge(from_dict(to_dict(merged_config)),
+                                             from_dict(to_dict(other_config))))
 
     return merged_config

@@ -5,9 +5,9 @@ import inspect
 import itertools
 from typing import Any, Callable, Dict, Optional, Type, Union
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
-from .core import from_dict
+from .core import from_dict, merge
 from .utils import clean_multiline
 
 
@@ -131,9 +131,7 @@ class init:
         config_node = from_dict(config)
 
         if len(kwargs) > 0:
-            config_node = OmegaConf.merge(
-                config_node, from_dict(kwargs)
-            )
+            config_node = merge(config_node, from_dict(kwargs))
 
         if cls.TARGET not in config_node:
             msg = (f'Cannot instantiate from `{config_node}`: '
@@ -150,7 +148,7 @@ class init:
                 param = cls.later(config=param, _recursive_=True)
             return param
 
-        init_call_dict = {k: _recursive_init(v)
+        init_call_dict = {str(k): _recursive_init(v)
                           for k, v in config_node.items()
                           if k != cls.TARGET}
 

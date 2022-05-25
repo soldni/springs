@@ -125,7 +125,6 @@ class cli:
         name: str,
         config_node: DictConfig,
         print_fn: Optional[Callable] = None,
-        strict_input: bool = False,
         *args: Any,
         **kwargs: Any
     ) -> Callable:
@@ -184,7 +183,7 @@ class cli:
             return InitLater.no_op()
 
         # load configuration with node parsers
-        parsed_config = merge(config_node, input_config, strict=strict_input)
+        parsed_config = merge(config_node, input_config)
 
         # check if all parameters are provided/resolved
         parsed_config = validate(parsed_config)
@@ -203,7 +202,6 @@ class cli:
 
     def __new__(cls: Type['cli'],
                 config_node_cls: Any,
-                strict_input: bool = False,
                 print_fn: Optional[Callable] = None) -> Callable:
 
         if not(isclass(config_node_cls) and is_dataclass(config_node_cls)):
@@ -217,7 +215,6 @@ class cli:
             return partial(cls._wrapped_main_method,
                            func=func,
                            name=name,
-                           strict_input=strict_input,
                            config_node=config_node,
                            print_fn=print_fn)
         return wrapper

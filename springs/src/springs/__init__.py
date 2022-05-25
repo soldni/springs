@@ -1,10 +1,9 @@
 from .cli import cli
 from .core import (
+    all_resolvers,
     MISSING,
-
     cast,
     dataclass,
-    editable,
     field,
     from_dict,
     from_file,
@@ -21,13 +20,15 @@ from .core import (
 from .init import Target, init
 from .logging import configure_logging
 
+# must import resolvers to register them
+from . import resolvers     # noqa
 
 __all__ = [
+    'all_resolvers',
     'cast',
     'cli',
     'configure_logging',
     'dataclass',
-    'editable',
     'field',
     'from_dict',
     'from_file',
