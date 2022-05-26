@@ -106,10 +106,30 @@ In your experiment code, run:
 ```python
 def run_model(model_config: ModelConfig):
     ...
-    model = sp.init.now(config)
+    model = sp.init.now(model_config)
 ```
 
-if, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
+### `init.now` vs `init.later`
+
+`init.now` is used to immediately initialize a class or run a method.
+But what if the function you are not ready to run the `_target_` you want to initialize?
+This is common for example if you receive a configuration in the init method of a class, but you don't have all parameters to run it until later in the object lifetime. In that case, you might want to use `init.later`.
+Example:
+
+```python
+config = sp.from_dict({'_target_': 'str.lower'})
+fn = sp.init.later(config)
+
+... # much computation occurs
+
+fn('THIS TO LOWERCASE')     # returns `this to lowercase`
+```
+
+Note that, for convenience `sp.init.now` is aliased to `sp.init`.
+
+### Path as `__target__`
+
+If, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
 
 ```python
 import transformers

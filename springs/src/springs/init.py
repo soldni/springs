@@ -164,5 +164,8 @@ class init:
         """Create a later, but initialize it now!"""
         if config is None:
             return None
-
         return cls.later(config=config, _recursive_=_recursive_, **kwargs)()
+
+    def __new__(cls: Type['init'], *args, **kwargs):
+        """Alias init(...) to init.now(...)"""
+        return cls.now(*args, **kwargs)
