@@ -21,7 +21,7 @@ class DataClass(Protocol):
         return is_dataclass(__instance)
 
 
-ConfigType = Union[DictConfig, Dict[str, Any], Type[DataClass], str]
+ConfigType = Union[DictConfig, Dict[str, Any], Type[DataClass], str, DataClass]
 
 
 @dataclass
@@ -81,7 +81,7 @@ def validate(config_node: ConfigType) -> DictConfig:
 
 def cast(config: Any) -> DictConfig:
     if is_dataclass(config):
-        return from_dataclass(config)   # type: ignore
+        return from_dataclass(config)
     elif isinstance(config, dict):
         return from_dict(config)
     elif isinstance(config, str):
@@ -99,7 +99,7 @@ def from_options(opts: Sequence[str]) -> DictConfig:
     return config
 
 
-def from_dataclass(config: Any) -> DictConfig:
+def from_dataclass(config: ConfigType) -> DictConfig:
     if not(is_dataclass(config)):
         msg = '`config_node` must be be decorated as a dataclass'
         raise ValueError(msg)

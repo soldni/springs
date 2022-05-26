@@ -3,11 +3,11 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Dict, Optional, Type, Union
+from typing import Any, Callable, Dict, Optional, Type
 
 from omegaconf import DictConfig
 
-from .core import from_dict, merge
+from .core import ConfigType, cast, merge
 from .utils import clean_multiline
 
 
@@ -102,10 +102,9 @@ class init:
     TARGET: str = '_target_'
 
     @classmethod
-    def callable(cls: Type['init'],
-                 config: Union[DictConfig, Dict[str, Any]]) -> Callable:
+    def callable(cls: Type['init'], config: ConfigType) -> Callable:
 
-        config = from_dict(config)
+        config = cast(config)
 
         try:
             target: str = config[cls.TARGET]
@@ -117,7 +116,7 @@ class init:
     @classmethod
     def later(
         cls: Type['init'],
-        config: Optional[Union[Dict[str, Any], DictConfig]] = None,
+        config: Optional[ConfigType] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
     ) -> InitLater:
@@ -128,10 +127,10 @@ class init:
         if config is None:
             return InitLater.no_op()
 
-        config_node = from_dict(config)
+        config_node = cast(config)
 
         if len(kwargs) > 0:
-            config_node = merge(config_node, from_dict(kwargs))
+            config_node = merge(config_node, cast(kwargs))
 
         if cls.TARGET not in config_node:
             msg = (f'Cannot instantiate from `{config_node}`: '
@@ -157,7 +156,7 @@ class init:
     @classmethod
     def now(
         cls: Type['init'],
-        config: Optional[Union[DictConfig, dict]] = None,
+        config: Optional[ConfigType] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
     ) -> object:
