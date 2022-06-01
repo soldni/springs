@@ -251,7 +251,8 @@ def _init_new_nodes(merge_into: DictConfig, merge_from: DictConfig) -> None:
                 # be one, since its type is a dataclass. Therefore, we first
                 # initialize this its node with an empty dataclass, which
                 # will then cause no issue when merging.
-                setattr(merge_into, key, from_dataclass(merge_into_type))
+                setattr(merge_into, key,
+                        from_dataclass(merge_into_type))    # type: ignore
 
                 # now that we have a proper dataclass here, we again
                 # recursively see if there are any new nodes to initialize.
