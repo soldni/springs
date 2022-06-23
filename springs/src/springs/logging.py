@@ -6,22 +6,23 @@ from typing import Optional, Type, Union
 
 
 class configure_logging:
-    _DEBUG_MODE = None
+    _DEBUG_MODE: bool = False
 
     @classmethod
     def debug(cls: Type['configure_logging'],
               *args,
-              logging_level: Optional[int] = None,
               **kwargs) -> logging.Logger:
 
-        if logging_level is not None:
+        if 'logging_level' in kwargs:
             msg = '`logging_level` was provided to `debug`, but it is ignored'
             warnings.warn(msg)
 
-        cls._DEBUG_MODE = True
-        return cls(*args, logging_level=logging.DEBUG, **kwargs)
+        kwargs['logging_level'] = logging.DEBUG
 
-    def __new__(
+        cls._DEBUG_MODE = True
+        return cls.__new__(*args, **kwargs)
+
+    def __new__(    # type: ignore
         cls: Type['configure_logging'],
         logger_name: Optional[str] = None,
         file_logging_path: Optional[Path] = None,

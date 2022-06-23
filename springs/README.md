@@ -143,6 +143,31 @@ class ModelConfig:
     num_classes: int = 2
 ```
 
+### Static and Dynamic Type Checking
+
+Springs supports both static and dynamic (at runtime) type checking when initializing objects.
+To start, your configuration objects should inherit from `springs.DataClass`:
+
+```python
+import springs as sp
+
+@sp.dataclass
+class TokenizerConfig(sp.DataClass):
+    _target_: str = 'transformers.AutoTokenizer.from_pretrained'
+    pretrained_model_name_or_path: 'str' = 'bert-base-uncased'
+```
+
+Then, you can pass the expected return type when initializing an object:
+
+```python
+@sp.cli(TokenizerConfig)
+def main(config: TokenizerConfig):
+    tokenizer = sp.init(config, PreTrainedTokenizerBase)
+    print(tokenizer)
+```
+
+This will raise an error when the tokenizer is not a subclass of `PreTrainedTokenizerBase`. Further, if you use a static type checker in your workflow (e.g., [Pylance][1] in Visual Studio Code), `springs.init` will also annotate its return type accordingly.
+
 ### Resolvers
 
 Guide coming soon!
@@ -187,3 +212,5 @@ test_config:
   src_field: full_text
   tgt_field: summary
 ```
+
+[1]: https://devblogs.microsoft.com/python/announcing-pylance-fast-feature-rich-language-support-for-python-in-visual-studio-code/

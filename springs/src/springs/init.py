@@ -3,7 +3,7 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 from omegaconf import DictConfig
 
@@ -12,6 +12,15 @@ from .utils import clean_multiline
 
 
 class InitLater(functools.partial):
+
+    # inherits slots from functools.partial
+    __slots__ = "type_",
+
+    def __new__(cls, func, type_: Optional[type] = None, /, *args, **keywords):
+        cl = super().__new__(cls, func, *args, **keywords)
+        cl.type_ = type_
+        return cl
+
     def get_kw(self: 'InitLater', *args, **kwargs):
         """Shortcut for accessing parameters that have been
         provided to an InitLater object"""
@@ -41,12 +50,23 @@ class InitLater(functools.partial):
     def __call__(self: 'InitLater', /, *args, **kwargs):
         # recursively call deferred initialization if
         # we encounter another InitLater
-        args = [v() if isinstance(v, InitLater) else v
-                for v in itertools.chain(self.args, args)]
+        args = tuple(v() if isinstance(v, InitLater) else v
+                     for v in itertools.chain(self.args, args))
         kwargs = {k: v() if isinstance(v, InitLater) else v
                   for k, v in {**self.keywords, **kwargs}.items()}
         try:
-            return self.func(*args, **kwargs)
+            out = self.func(*args, **kwargs)
+
+            # if type is provided, then we check if the object that
+            # has been initialized here is of the expected type.
+            # note that this only works for top-level init, and
+            # does not recursively check.
+            if self.type_ is not None and not isinstance(out, self.type_):
+                msg = (f"Initialized object `{out}` is not the right type: "
+                       f"expected `{self.type_}`, got {type(out)}")
+                raise TypeError(msg)
+
+            return out
         except Exception as e:
             ex_name = type(e).__name__
             fn_name = repr(self.func)
@@ -90,12 +110,15 @@ class Target:
                 container = cls.from_string(m_name)
             callable_ = getattr(container, c_name, None)
         else:
-            callable_ = globals().get(path, __builtins__.get(path, None))
+            callable_ = globals().get(path, getattr(__builtins__, path, None))
 
         if callable_ is None:
             raise ImportError(f'Cannot find callable at {path}')
 
         return callable_
+
+
+InitT = TypeVar('InitT')
 
 
 class init:
@@ -117,9 +140,10 @@ class init:
     def later(
         cls: Type['init'],
         config: Optional[ConfigType] = None,
+        _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
-    ) -> InitLater:
+    ) -> Callable[..., InitT]:
         """Return a InitLater object to be used to instantiate a
         new class or call a function"""
 
@@ -151,19 +175,21 @@ class init:
                           for k, v in config_node.items()
                           if k != cls.TARGET}
 
-        return InitLater(fn, **init_call_dict)
+        return InitLater(fn, _type_, **init_call_dict)
 
     @classmethod
     def now(
         cls: Type['init'],
         config: Optional[ConfigType] = None,
+        _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         **kwargs: Dict[str, Any]
-    ) -> object:
+    ) -> InitT:
         """Create a later, but initialize it now!"""
-        if config is None:
-            return None
-        return cls.later(config=config, _recursive_=_recursive_, **kwargs)()
+        return cls.later(config=config,
+                         _type_=_type_,
+                         _recursive_=_recursive_,
+                         **kwargs)()
 
     def __new__(cls: Type['init'], *args, **kwargs):
         """Alias init(...) to init.now(...)"""

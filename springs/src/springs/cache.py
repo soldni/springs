@@ -26,20 +26,20 @@ def cache_to_disk(kwargs: Optional[Sequence[str]] = None,
 
     if location is None:
         location = (Path('~') / '.cache').expanduser().absolute()
-    location = Path(location)
+    path_location = Path(location)
 
     # make caching directory if it doesn't exist
-    if not location.exists():
-        location.mkdir(parents=True)
+    if not path_location.exists():
+        path_location.mkdir(parents=True)
 
     def decorator(func: Callable,
                   kwargs_to_cache: Optional[Sequence[str]] = kwargs,
-                  location: Path = location) -> Callable:
+                  location: Path = path_location) -> Callable:
         func_name = Target.to_string(func)
 
         @wraps(func)
         def wrapper(
-            *args,
+            *args: Any,
             __kwargs_to_cache__: Optional[Sequence[str]] = kwargs_to_cache,
             __location__: Path = location,
             __invalidate__: bool = False,

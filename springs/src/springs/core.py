@@ -1,27 +1,34 @@
 import copy
-from dataclasses import dataclass, field, is_dataclass     # noqa: F401
+from abc import ABC, ABCMeta
+from dataclasses import dataclass, is_dataclass, field      # noqa: F401
 from contextlib import contextmanager, ExitStack
 from pathlib import Path
-from typing import (Any, Callable, Dict, Iterator, Optional, Protocol,
+from inspect import isclass
+from typing import (Any, Callable, Dict, Iterator, Optional,
                     Sequence, Type, TypeVar, Union)
 
 from omegaconf import MISSING, DictConfig, open_dict, OmegaConf
 from omegaconf.basecontainer import BaseContainer
 
 
-# for return type
-RT = TypeVar('RT')
+class DataClassMeta(ABCMeta):
+    def __subclasscheck__(cls: 'DataClassMeta', subclass: Any) -> bool:
+        return isclass(subclass) and is_dataclass(subclass)
 
 
-class DataClass(Protocol):
-    # from https://stackoverflow.com/a/55240861
+class DataClass(ABC, metaclass=DataClassMeta):
+    """Generic prototype for a dataclass"""
+
     __dataclass_fields__: Dict[str, Any]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        ...
 
     def __instancecheck__(self, __instance: Any) -> bool:
         return is_dataclass(__instance)
 
 
-ConfigType = Union[DictConfig, Dict[str, Any], Type[DataClass], str, DataClass]
+ConfigType = Union[DictConfig, Dict[str, Any], str, DataClass]
 
 
 @dataclass
@@ -99,7 +106,7 @@ def from_options(opts: Sequence[str]) -> DictConfig:
     return config
 
 
-def from_dataclass(config: ConfigType) -> DictConfig:
+def from_dataclass(config: Union[DataClass, Type[DataClass]]) -> DictConfig:
     if not(is_dataclass(config)):
         msg = '`config_node` must be be decorated as a dataclass'
         raise ValueError(msg)
@@ -175,15 +182,24 @@ def to_yaml(config: Union[DictConfig, Dict[str, Any]]) -> str:
 
 def to_dict(config: Union[DictConfig, Dict[str, Any]]) -> Dict[str, Any]:
     config = from_dict(config)
-    return OmegaConf.to_container(config)
+    container: Dict[str, Any] = OmegaConf.to_container(config)  # type: ignore
+    return container
+
+
+# for return type
+RegisterReturnType = TypeVar('RegisterReturnType')
 
 
 def register(
     name: str,
     use_cache: bool = False
-) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
+) -> Callable[[Callable[..., RegisterReturnType]],
+              Callable[..., RegisterReturnType]]:
 
-    def _register(func: Callable[..., RT]) -> Callable[..., RT]:
+    def _register(
+        func: Callable[..., RegisterReturnType]
+    ) -> Callable[..., RegisterReturnType]:
+
         # will raise an error if the resolver is already registered
         OmegaConf.register_new_resolver(
             name=name, resolver=func, use_cache=use_cache, replace=False
