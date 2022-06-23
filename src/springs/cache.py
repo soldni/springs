@@ -4,8 +4,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence, Union
 
-
-from .init import Target
+from .initialize import Target
 
 
 def cache_to_disk(kwargs: Optional[Sequence[str]] = None,

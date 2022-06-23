@@ -7,7 +7,6 @@ from typing import Callable, Optional, Union
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
-
 __all__ = ['clean_multiline', 'PrintUtils']
 
 
@@ -58,7 +57,7 @@ class PrintUtils:
             if isinstance(line, dict):
                 content += f'{self.to_yaml(line, level)}\n'
             else:
-                content += f'{self.indent(line, level)}\n'
+                content += f'{self.indent(str(line), level)}\n'
 
             level += 1 if level < level_up else 0   # type: ignore
 

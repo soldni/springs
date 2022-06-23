@@ -4,14 +4,13 @@ from enum import Enum
 from functools import partial
 from inspect import getfile, getfullargspec, isclass
 from pathlib import Path
-from typing import (Any, Callable, Optional, Protocol, Sequence,
-                    Type, overload)
+from typing import Any, Callable, Optional, Protocol, Sequence, Type, overload
 
 from omegaconf import DictConfig
 
-from .core import (from_dataclass, from_file, from_options, merge, traverse,
-                   validate, DataClass)
-from .init import InitLater
+from .core import (DataClass, from_dataclass, from_file, from_options, merge,
+                   traverse, validate)
+from .initialize import InitLater
 from .utils import PrintUtils, clean_multiline
 
 

@@ -1,13 +1,13 @@
 import copy
 from abc import ABC, ABCMeta
-from dataclasses import dataclass, is_dataclass, field      # noqa: F401
-from contextlib import contextmanager, ExitStack
-from pathlib import Path
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, field, is_dataclass  # noqa: F401
 from inspect import isclass
-from typing import (Any, Callable, Dict, Iterator, Optional,
-                    Sequence, Type, TypeVar, Union)
+from pathlib import Path
+from typing import (Any, Callable, Dict, Iterator, Optional, Sequence, Type,
+                    TypeVar, Union)
 
-from omegaconf import MISSING, DictConfig, open_dict, OmegaConf
+from omegaconf import MISSING, DictConfig, OmegaConf, open_dict
 from omegaconf.basecontainer import BaseContainer
 
 
