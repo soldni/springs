@@ -119,13 +119,16 @@ class Target:
 
 
 InitT = TypeVar('InitT')
+CallableT = TypeVar('CallableT', bound=Callable)
 
 
 class init:
     TARGET: str = '_target_'
 
     @classmethod
-    def callable(cls: Type['init'], config: ConfigType) -> Callable:
+    def callable(cls: Type['init'],
+                 config: ConfigType,
+                 _type_: Optional[CallableT] = None) -> CallableT:
 
         config = cast(config)
 
