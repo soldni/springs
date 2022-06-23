@@ -1,6 +1,7 @@
-![](/static/logo.png)
 
 # Springs
+
+![Logo of Springs. Generated using DALL·E mini.](/static/logo.png)
 
 A set of utilities to turn [OmegaConf][1] into a fully fledge configuration utils.
 Just like the springs inside an Omega watch, they help you move with your experiments.
