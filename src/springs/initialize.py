@@ -3,7 +3,7 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Dict, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Type, TypeVar
 
 from omegaconf import DictConfig
 
@@ -145,7 +145,7 @@ class init:
         config: Optional[ConfigType] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
-        **kwargs: Dict[str, Any]
+        **kwargs: Any
     ) -> Callable[..., InitT]:
         """Return a InitLater object to be used to instantiate a
         new class or call a function"""
@@ -186,14 +186,24 @@ class init:
         config: Optional[ConfigType] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
-        **kwargs: Dict[str, Any]
+        **kwargs: Any
     ) -> InitT:
         """Create a later, but initialize it now!"""
-        return cls.later(config=config,
-                         _type_=_type_,
-                         _recursive_=_recursive_,
-                         **kwargs)()
+        init_call = cls.later(config=config,
+                              _type_=_type_,
+                              _recursive_=_recursive_,
+                              **kwargs)
+        return init_call()
 
-    def __new__(cls: Type['init'], *args, **kwargs):
+    def __new__(
+        cls: Type['init'],
+        config: Optional[ConfigType] = None,
+        _type_: Optional[Type[InitT]] = None,
+        _recursive_: bool = True,
+        **kwargs: Any
+    ) -> InitT:
         """Alias init(...) to init.now(...)"""
-        return cls.now(*args, **kwargs)
+        return cls.now(config=config,
+                       _type_=_type_,
+                       _recursive_=_recursive_,
+                       **kwargs)

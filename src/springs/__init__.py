@@ -19,7 +19,7 @@ from .core import (
     traverse,
     validate
 )
-from .init import Target, init
+from .initialize import Target, init
 from .logging import configure_logging
 
 # must import resolvers to register them; we keep them prefixed
