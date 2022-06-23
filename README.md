@@ -1,113 +1,222 @@
-# Espresso Config
+![](/static/logo.png)
 
-A struct config parser that you can set up in the time it
-takes to make an espresso. To install, run
+# Springs
+
+A set of utilities to turn [OmegaConf][1] into a fully fledge configuration utils.
+Just like the springs inside an Omega watch, they help you move with your experiments.
+
+Springs overlaps in functionality with [Hydra][2], but without all the unnecessary boilerplate.
+
+## Philosophy
+
+OmegaConf supports creating configurations in all sorts of manners, but we believe that there are benefits into defining configuration from structured objects, namely dataclass.
+Springs is built around that notion: write one or more dataclass to compose a configuration (with appropriate defaults), then parse the remainder of options or missing values from command line/a yaml file.
+
+Let's look at an example. Imagine we are building a configuration for a machine learning (ML) experiment, and we want to provide information about model and data to use.
+We start by writing the following structure configuration
+
+```python
+import springs as sp
+
+@sp.dataclass                   # alias to dataclasses.dataclass
+class DataConfig:
+    path: str = sp.MISSING      # alias to dataclasses.MISSING
+    split: str = 'train'
+
+@sp.dataclass
+class ModelConfig:
+    name: str = sp.MISSING
+    num_labels: int = 2
+
+@sp.dataclass
+class ExperimentConfig:
+    batch_size: int = 16
+    seed: int = 42
+
+@sp.dataclass
+class Config:                   # this is our overall config
+    data: DataConfig = DataConfig()
+    model: ModelConfig = ModelConfig()
+    exp: ExperimentConfig = ExperimentConfig()
+```
+
+Note how, in matching with OmegaConf syntax, we use `MISSING` to indicate any value that has no default and should be provided at runtime.
+
+If we want to use this configuration with a function that actually runs this experiment, we can use `sp.cli` as follows:
+
+```python
+@sp.cli(Config)
+def main(config: Config)
+    print(config)           # this will print the configuration like a dict
+    config.exp.seed         # you can use dot notation to access attributes...
+    config['exp']['seed']   # ...or treat it like a dictionary!
+
+
+if __name__ == '__main__':
+    main()
+
+```
+
+Notice how, in the configuration `Config` above, some parameters are missing.
+We can specify them from command line...
 
 ```bash
-pip install espresso-config
+python main.py data.path=/path/to/data model.name=bert-base-uncased
 ```
 
-Python 3.8 or newer is required.
+...or from a YAML config file:
 
+```YAML
+data:
+    path: /path/to/data
 
-## Why Espresso Config?
-
-There are a million of parsers that can turn a YAML configuration / CLI flags into a configuration file, *e.g.*, [Hydra](https://hydra.cc), [ML Collections](https://github.com/google/ml_collections), so why another one? Espresso Config was designed to meet the following requirements:
-
-1. Support structured configs (*i.e.*, define configurations with classes)
-2. Allow nested classes in configuration
-3. Functions
-
-
-## Motivating Example
-
-Imagine you want to run the following experiment:
-
-```yaml
-backbone: t5-large
 model:
-  metrics:
-    rouge:
-      _target_: torchmetrics.functional.text.rouge.rouge_score
-  tokenizer:
-    _target_: transformers.AutoTokenizer.from_pretrained
-    pretrained_model_name_or_path: t5-large
-  transformer:
-    _target_: transformers.AutoModelForSeq2SeqLM.from_pretrained
-    max_sequence_length: 64
-    pretrained_model_name_or_path: t5-large
+    name: bert-base-uncased
+
+# you can override any part of the config via YAML or CLI
+# CLI takes precedence over YAML.
+exp:
+    seed: 1337
+
 ```
 
-Sure, you could parse that yaml file and get a `dict`.
-But (a) working with dictionaries is tedious (b) there's no
-typing, and (c) you don't want to have to declare all blocks
-each time; it would be good if you could save some commonly used
-configurations, such as the parameters for one of `transformer`
-or `tokenizer` keys.
+To run with from YAML, do:
 
-Espresso Config allows you to solve all off those problems
-by specifying a struct class as follows:
+```bash
+python main.py -c config.yaml
+```
+
+Easy, right?
+
+### Initializing Object from Configurations
+
+Sometimes a configuration contains all the necessary information to
+instantiate an object from it.
+Springs supports this use case, and it is as easy as providing a `_target_` node in a configuration:
 
 ```python
-from espresso_config import (
-    ConfigNode,
-    ConfigRegistry,
-    ConfigParam,
-    ConfigFlexNode
-)
-
-@ConfigRegistry.add
-class seq2seq(ConfigNode):
-    _target_: ConfigParam(str) = 'transformers.AutoModelForSeq2SeqLM.from_pretrained'
-
-@ConfigRegistry.add
-class tok(ConfigNode):
-    _target_: ConfigParam(str) = 'transformers.AutoTokenizer.from_pretrained'
-
-@ConfigRegistry.add
-class rouge(ConfigNode):
-    _target_: ConfigParam(str) = 'torchmetrics.functional.text.rouge.rouge_score'
-
-class ApplicationConfig(ConfigNode):
-    backbone: ConfigParam(str)
-    class model(ConfigNode):
-        class transformer(ConfigNode):
-            _target_: ConfigParam(str)
-            pretrained_model_name_or_path: ConfigParam(str) = '${backbone}'
-            max_sequence_length: ConfigParam(int) = 64
-        class tokenizer(ConfigNode):
-            _target_: ConfigParam(str)
-            pretrained_model_name_or_path: ConfigParam(str) = '${backbone}'
-        metrics: ConfigParam(ConfigFlexNode) = {}
+@sp.dataclass
+class ModelConfig:
+    _target_: str = \
+        'transformers.AutoModelForSequenceClassification.from_pretrained'
+    pretrained_model_name_or_path: str = 'bert-base-uncased'
+    num_classes: int = 2
 ```
 
-Then, your YAML configuration can be as simple as:
-
-```yaml
-backbone: t5-large
-model:
-  transformer@seq2seq: {}
-  tokenizer@tok: {}
-  metrics:
-    rouge@rouge: {}
-```
-
-Voila! To load the config, run:
+In your experiment code, run:
 
 ```python
-from espresso_config import config_from_file
-
-config = config_from_file(ApplicationConfig, path_to_yaml)
+def run_model(model_config: ModelConfig):
+    ...
+    model = sp.init.now(model_config)
 ```
 
-## Placeholder Variable
+### `init.now` vs `init.later`
 
-A placeholder variable is a config value that references another
-section of the config, e.g. another value or section.
-It uses syntax `${path.to.key}`.
+`init.now` is used to immediately initialize a class or run a method.
+But what if the function you are not ready to run the `_target_` you want to initialize?
+This is common for example if you receive a configuration in the init method of a class, but you don't have all parameters to run it until later in the object lifetime. In that case, you might want to use `init.later`.
+Example:
+
+```python
+config = sp.from_dict({'_target_': 'str.lower'})
+fn = sp.init.later(config)
+
+... # much computation occurs
+
+fn('THIS TO LOWERCASE')     # returns `this to lowercase`
+```
+
+Note that, for convenience `sp.init.now` is aliased to `sp.init`.
+
+### Path as `__target__`
+
+If, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
+
+```python
+import transformers
+
+@sp.dataclass
+class ModelConfig:
+    _target_: str = sp.Target.to_string(transformers.
+                                        AutoModelForSequenceClassification.
+                                        from_pretrained)
+    pretrained_model_name_or_path: str = 'bert-base-uncased'
+    num_classes: int = 2
+```
+
+### Static and Dynamic Type Checking
+
+Springs supports both static and dynamic (at runtime) type checking when initializing objects.
+To start, your configuration objects should inherit from `springs.DataClass`:
+
+```python
+import springs as sp
+
+@sp.dataclass
+class TokenizerConfig(sp.DataClass):
+    _target_: str = 'transformers.AutoTokenizer.from_pretrained'
+    pretrained_model_name_or_path: 'str' = 'bert-base-uncased'
+```
+
+Then, you can pass the expected return type when initializing an object:
+
+```python
+@sp.cli(TokenizerConfig)
+def main(config: TokenizerConfig):
+    tokenizer = sp.init(config, PreTrainedTokenizerBase)
+    print(tokenizer)
+```
+
+This will raise an error when the tokenizer is not a subclass of `PreTrainedTokenizerBase`. Further, if you use a static type checker in your workflow (e.g., [Pylance][3] in [Visual Studio Code][4]), `springs.init` will also annotate its return type accordingly.
+
+### Resolvers
+
+Guide coming soon!
+
+## Tips and Tricks
+
+This section includes a bunch of tips and tricks for working with OmegaConf and YAML.
+
+### Tip 1: Repeating nodes in YAML input
+
+In setting up YAML configuration files for ML experiments, it is common to
+have almost-repeated sections.
+In these cases, you can take advantage of YAML's built in variable mechanism and dictionary merging to remove duplicated imports:
+
+```yaml
+# &tc assigns an alias to this node
+train_config: &tc
+  path: /path/to/data
+  src_field: full_text
+  tgt_field: summary
+  split_name: train
+
+test_config:
+  # << operator indicates merging,
+  # *tc is a reference to the alias above
+  << : *tc
+  split_name: test
+```
+
+This will resolve to:
+
+```yaml
+train_config:
+  path: /path/to/data
+  split_name: train
+  src_field: full_text
+  tgt_field: summary
+
+test_config:
+  path: /path/to/data
+  split_name: test
+  src_field: full_text
+  tgt_field: summary
+```
 
 
-## Registry Reference
-
-A registry reference is a reference to a node config that has been
-added to the config registry. It uses syntax `@placeholder_name`.
+[1]: https://omegaconf.readthedocs.io/
+[2]: https://hydra.cc/
+[3]: https://devblogs.microsoft.com/python/announcing-pylance-fast-feature-rich-language-support-for-python-in-visual-studio-code/
+[4]: https://code.visualstudio.com
