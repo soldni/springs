@@ -3,7 +3,7 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Protocol, Type, TypeVar
 
 from omegaconf import DictConfig
 
@@ -61,7 +61,16 @@ class InitLater(functools.partial):
             # has been initialized here is of the expected type.
             # note that this only works for top-level init, and
             # does not recursively check.
-            if self.type_ is not None and not isinstance(out, self.type_):
+
+            # there are some exceptions, for example we do type check
+            # iff we have received a class, and the class is not a protocol
+            do_type_check = (
+                self.type_ is not None
+                and inspect.isclass(self.type_)
+                and not isinstance(self.type_, Protocol)
+            )
+
+            if do_type_check and not isinstance(out, self.type_):
                 msg = (f"Initialized object `{out}` is not the right type: "
                        f"expected `{self.type_}`, got {type(out)}")
                 raise TypeError(msg)
