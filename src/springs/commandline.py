@@ -8,7 +8,7 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Type, overload
 
 from omegaconf import DictConfig
 
-from .core import (DataClass, from_dataclass, from_file, from_options, merge,
+from .core import (_DataClass, from_dataclass, from_file, from_options, merge,
                    traverse, validate)
 from .initialize import InitLater
 from .utils import PrintUtils, clean_multiline
@@ -54,8 +54,6 @@ class DecoratedMainFnProtocol(Protocol):
         ...
 
 
-# class cli:
-#     @classmethod
 def check_if_callable_can_be_decorated(func: MainFnProtocol):
     expected_args = getfullargspec(func).args
     if len(expected_args) == 0:
@@ -209,7 +207,7 @@ def wrap_main_method(
 
     # print it if requested
     if not(opts.quiet) or opts.parsed:
-        pu.print('PARSE/ALL CFG:', parsed_config)   # type: ignore
+        pu.print('PARSE/ALL CFG:', parsed_config)
 
     if do_no_run:
         # we are not running because the user has requested to print
@@ -221,12 +219,12 @@ def wrap_main_method(
 
 
 def cli(
-    config_node_cls: Type[DataClass],
+    config_node_cls: Type[_DataClass],
     print_fn: Optional[PrintFnProtocol] = None
 ) -> Callable[[MainFnProtocol], DecoratedMainFnProtocol]:
 
     if not(isclass(config_node_cls) and
-           issubclass(config_node_cls, DataClass)):
+           issubclass(config_node_cls, _DataClass)):
         msg = '`config_node` must be be decorated as a dataclass'
         raise ValueError(msg)
 

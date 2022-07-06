@@ -1,8 +1,38 @@
+from typing import Callable, Sequence, TypeVar
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .core import register
+from omegaconf import OmegaConf
+from omegaconf.basecontainer import BaseContainer
+
+
+# for return type
+RegisterReturnType = TypeVar('RegisterReturnType')
+
+
+def register(
+    name: str,
+    use_cache: bool = False
+) -> Callable[[Callable[..., RegisterReturnType]],
+              Callable[..., RegisterReturnType]]:
+
+    def _register(
+        func: Callable[..., RegisterReturnType]
+    ) -> Callable[..., RegisterReturnType]:
+
+        # will raise an error if the resolver is already registered
+        OmegaConf.register_new_resolver(
+            name=name, resolver=func, use_cache=use_cache, replace=False
+        )
+        return func
+
+    return _register
+
+
+def all_resolvers() -> Sequence[str]:
+    return [str(k) for k in BaseContainer._resolvers.keys()]
 
 
 @register('sp.fullpath')
