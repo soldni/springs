@@ -2,12 +2,22 @@ import re
 import shutil
 from dataclasses import dataclass, field
 from textwrap import dedent
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Any, Type
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
+from typeguard import check_type as typeguard_check_type
 
-__all__ = ['clean_multiline', 'PrintUtils']
+
+__all__ = ['clean_multiline', 'PrintUtils', 'check_type']
+
+
+def check_type(value: Any, type: Type) -> bool:
+    try:
+        typeguard_check_type('', value, type)
+        return True
+    except TypeError:
+        return False
 
 
 def clean_multiline(string: str) -> str:

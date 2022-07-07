@@ -68,7 +68,7 @@ def from_none(*args: Any, **kwargs: Any) -> DictConfig:
     return OmegaConf.create()
 
 
-def from_dataclass(config: Union[Type[_DataClass], _DataClass]) -> DictConfig:
+def from_dataclass(config: Any) -> DictConfig:
     """Cast a dataclass to a structured omega config"""
     if not is_dataclass(config):
         raise TypeError(f'`{config}` is not a dataclass!')

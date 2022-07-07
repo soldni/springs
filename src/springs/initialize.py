@@ -8,7 +8,7 @@ from typing import Any, Callable, Optional, Protocol, Type, TypeVar
 from omegaconf import DictConfig
 
 from .core import ConfigType, cast, merge
-from .utils import clean_multiline
+from .utils import check_type, clean_multiline
 
 
 class InitLater(functools.partial):
@@ -67,7 +67,7 @@ class InitLater(functools.partial):
             do_type_check = (
                 self.type_ is not None
                 and inspect.isclass(self.type_)
-                and not isinstance(self.type_, Protocol)
+                and not check_type(self.type_, Protocol)
             )
 
             if do_type_check and not isinstance(out, self.type_):

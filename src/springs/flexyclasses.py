@@ -5,15 +5,7 @@ from functools import reduce
 from types import MappingProxyType
 from typing import Any, Dict, Type
 
-from typeguard import check_type as typeguard_check_type
-
-
-def check_type(value: Any, type: Type) -> bool:
-    try:
-        typeguard_check_type('', value, type)
-        return True
-    except TypeError:
-        return False
+from .utils import check_type
 
 
 def _get_flexyclass_mro(cls: type, attr_name: str) -> Dict[str, Type]:
