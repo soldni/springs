@@ -185,7 +185,6 @@ print(config)
 # {'_target_': 'torchmetrics.F1Score', 'average': 'macro', 'num_classes': 2}
 ```
 
-
 ### Resolvers
 
 Guide coming soon!

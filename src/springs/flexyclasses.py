@@ -2,7 +2,6 @@ import inspect
 from abc import ABC
 from dataclasses import MISSING, Field, field
 from functools import reduce
-from sys import version_info
 from types import MappingProxyType
 from typing import Any, Dict, Type
 
@@ -10,14 +9,11 @@ from typeguard import check_type as typeguard_check_type
 
 
 def check_type(value: Any, type: Type) -> bool:
-    if version_info.major <= 3 and version_info.minor < 10:
-        try:
-            typeguard_check_type('', value, type)
-            return True
-        except TypeError:
-            return False
-    else:
-        return isinstance(value, type)
+    try:
+        typeguard_check_type('', value, type)
+        return True
+    except TypeError:
+        return False
 
 
 def _get_flexyclass_mro(cls: type, attr_name: str) -> Dict[str, Type]:
