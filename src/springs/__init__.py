@@ -1,24 +1,22 @@
-from dataclasses import field
-from omegaconf import II, SI
+from dataclasses import field, dataclass
+from omegaconf import II, SI, MISSING
 
 from .commandline import cli
 from .core import (
-    MISSING,
     cast,
-    dataclass,
     from_dataclass,
     from_dict,
     from_file,
-    from_flexyclass,
     from_none,
     from_options,
     from_string,
     merge,
     to_dict,
     to_yaml,
-    traverse,
     validate,
 )
+from .traversal import traverse
+from .types import get_type
 from .initialize import Target, init
 from .logging import configure_logging
 from .resolvers import register, all_resolvers
@@ -37,10 +35,10 @@ __all__ = [
     'from_dataclass',
     'from_dict',
     'from_file',
-    'from_flexyclass',
     'from_none',
     'from_options',
     'from_string',
+    'get_type',
     'II',
     'init',
     'merge',

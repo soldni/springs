@@ -1,15 +1,11 @@
 import re
 import shutil
-from dataclasses import dataclass, field
 from textwrap import dedent
 from typing import Callable, Optional, Union, Any, Type
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
 from typeguard import check_type as typeguard_check_type
-
-
-__all__ = ['clean_multiline', 'PrintUtils', 'check_type']
 
 
 def check_type(value: Any, type: Type) -> bool:
@@ -26,18 +22,21 @@ def clean_multiline(string: str) -> str:
     return string
 
 
-@dataclass
 class PrintUtils:
     """A few utilities to make printing easier"""
 
-    indent_step: int = 2
-    indent_char: str = ' '
-    separator_char: str = '-'
-    terminal_width: int = field(default=shutil.get_terminal_size().columns)
-    print_fn: Optional[Callable] = field(default_factory=lambda: print)
-
-    def __post_init__(self):
-        self.print_fn = self.print_fn or print
+    def __init__(self,
+                 indent_step: int = 2,
+                 indent_char: str = ' ',
+                 separator_char: str = '-',
+                 terminal_width: Optional[int] = None,
+                 print_fn: Optional[Callable[..., None]] = None) -> None:
+        self.indent_step = indent_step
+        self.indent_char = indent_char
+        self.separator_char = separator_char
+        self.terminal_width = (terminal_width or
+                               shutil.get_terminal_size().columns)
+        self.print_fn = print_fn or print
         self.has_printed_first_separator = False
         self.is_default_print = self.print_fn is print
 

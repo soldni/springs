@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional, Protocol, Type, TypeVar
 
 from omegaconf import DictConfig
 
-from .core import ConfigType, cast, merge
+from .core import ConfigType, cast
 from .utils import check_type, clean_multiline
 
 
@@ -64,6 +64,7 @@ class InitLater(functools.partial):
 
             # there are some exceptions, for example we do type check
             # iff we have received a class, and the class is not a protocol
+
             do_type_check = (
                 self.type_ is not None
                 and inspect.isclass(self.type_)
@@ -136,15 +137,18 @@ class init:
 
     @classmethod
     def callable(cls: Type['init'],
-                 config: ConfigType,
+                 config: Optional[ConfigType] = None,
+                 target: Optional[str] = None,
                  _type_: Optional[CallableT] = None) -> CallableT:
 
-        config = cast(config)
-
-        try:
-            target: str = config[cls.TARGET]
-        except KeyError:
-            raise KeyError(f'Config `{config}` has no `{cls.TARGET}` key!')
+        if target is not None and config is not None:
+            raise ValueError('Cannot specify both `target` and `config`')
+        elif target is None:
+            config = cast(config)
+            try:
+                target = str(config[cls.TARGET])
+            except KeyError:
+                raise KeyError(f'Config `{config}` has no `{cls.TARGET}` key!')
 
         return Target.from_string(target)
 
@@ -163,28 +167,31 @@ class init:
         if config is None:
             return InitLater.no_op()
 
+        # ensure we are working with a ConfigDict
         config_node = cast(config)
 
-        if len(kwargs) > 0:
-            config_node = merge(config_node, cast(kwargs))
-
-        if cls.TARGET not in config_node:
-            msg = (f'Cannot instantiate from `{config_node}`: '
-                   f'`{cls.TARGET}` keyword missing')
-            raise ValueError(msg)
-
-        fn = cls.callable(config_node)      # type: ignore
+        # try to get the target callable from either the config
+        # or keyword arguments passed to the init function
+        if cls.TARGET in config_node:
+            fn = cls.callable(config=config_node)
+        elif cls.TARGET in kwargs:
+            fn = cls.callable(target=kwargs[cls.TARGET])
+        else:
+            raise ValueError(f'Cannot instantiate from `{config_node}` and '
+                             f'`{kwargs}`: `{cls.TARGET}` keyword missing')
 
         def _recursive_init(param):
-            must_recursive_init = (_recursive_ and
-                                   isinstance(param, (DictConfig, dict))
-                                   and cls.TARGET in param)
+            must_recursive_init = (
+                _recursive_ and
+                isinstance(param, (DictConfig, dict)) and
+                cls.TARGET in param
+            )
             if must_recursive_init:
                 param = cls.later(config=param, _recursive_=True)
             return param
 
         init_call_dict = {str(k): _recursive_init(v)
-                          for k, v in config_node.items()
+                          for k, v in {**config_node, **kwargs}.items()
                           if k != cls.TARGET}
 
         return InitLater(fn, _type_, **init_call_dict)

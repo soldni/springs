@@ -229,6 +229,7 @@ def cli(
         raise ValueError(msg)
 
     config_node = from_dataclass(config_node_cls)
+
     name = config_node_cls.__name__
 
     def wrapper(func: MainFnProtocol) -> DecoratedMainFnProtocol:
