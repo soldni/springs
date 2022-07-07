@@ -9,6 +9,8 @@ from typing import Any, Dict, Iterator, Optional, Sequence, Type, Union
 from omegaconf import MISSING, DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
 
+from .flexyclasses import FlexyClassMeta
+
 
 class _DataClassMeta(ABCMeta):
     def __subclasscheck__(cls: '_DataClassMeta', subclass: Any) -> bool:
@@ -36,6 +38,7 @@ ConfigType = Union[
     Dict[str, Any],
     str,
     _DataClass,
+    FlexyClassMeta,
     Path,
     None
 ]
@@ -44,6 +47,8 @@ ConfigType = Union[
 def cast(config: ConfigType, copy: bool = False) -> DictConfig:
     if isinstance(config, _DataClass):
         return from_dataclass(config)
+    elif isclass(config) and issubclass(type(config), FlexyClassMeta):
+        return from_flexyclass(config)  # type: ignore
     elif isinstance(config, dict):
         return from_dict(config)
     elif isinstance(config, str):
@@ -65,10 +70,30 @@ def from_none(*args: Any, **kwargs: Any) -> DictConfig:
 
 def from_dataclass(config: Union[Type[_DataClass], _DataClass]) -> DictConfig:
     """Cast a dataclass to a structured omega config"""
+    if not is_dataclass(config):
+        raise TypeError(f'`{config}` is not a dataclass!')
+
     config = OmegaConf.structured(config)
     if not isinstance(config, DictConfig):
         raise TypeError(f'Cannot create dict config from `{config}`')
     return config
+
+
+def from_flexyclass(
+    config: Union[dict, FlexyClassMeta],
+    **overrides: Any
+) -> DictConfig:
+
+    if isclass(config):
+        if issubclass(type(config), FlexyClassMeta):
+            return from_dict(dict(config(**overrides)))
+        else:
+            raise TypeError(f'`{config}` was not decorated with @flexyclass')
+    else:
+        if isinstance(config, dict):
+            return from_dict(dict(config))
+        else:
+            raise TypeError(f'`{config}` is not a flexy class instance!')
 
 
 def from_dict(

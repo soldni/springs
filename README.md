@@ -151,18 +151,7 @@ class ModelConfig:
 ### Static and Dynamic Type Checking
 
 Springs supports both static and dynamic (at runtime) type checking when initializing objects.
-To start, your configuration objects should inherit from `springs.DataClass`:
-
-```python
-import springs as sp
-
-@sp.dataclass
-class TokenizerConfig(sp.DataClass):
-    _target_: str = 'transformers.AutoTokenizer.from_pretrained'
-    pretrained_model_name_or_path: 'str' = 'bert-base-uncased'
-```
-
-Then, you can pass the expected return type when initializing an object:
+To enable it, pass the expected return type when initializing an object:
 
 ```python
 @sp.cli(TokenizerConfig)
@@ -172,6 +161,30 @@ def main(config: TokenizerConfig):
 ```
 
 This will raise an error when the tokenizer is not a subclass of `PreTrainedTokenizerBase`. Further, if you use a static type checker in your workflow (e.g., [Pylance][3] in [Visual Studio Code][4]), `springs.init` will also annotate its return type accordingly.
+
+
+### Flexible Configurations
+
+Sometimes a configuration has some default parameters, but others are optional and depend on other factors, such as the `_target_` class.  In these cases, it is convenient to set up a flexible dataclass, or `flexyclass`.
+
+```python
+@sp.flexyclass
+class MetricConfig:
+    _target_: str = sp.MISSING
+    average: str = 'macro'
+
+config = sp.from_flexyclass(MetricConfig)
+overrides = {
+    '_target_': 'torchmetrics.F1Score',    # we override the _target_
+    'num_classes': 2    # this attribute does not exist in the structured config
+}
+
+config = sp.merge(config, sp.from_dict(overrides))
+print(config)
+# this will print the following:
+# {'_target_': 'torchmetrics.F1Score', 'average': 'macro', 'num_classes': 2}
+```
+
 
 ### Resolvers
 

@@ -6,8 +6,10 @@ from .core import (
     MISSING,
     cast,
     dataclass,
+    from_dataclass,
     from_dict,
     from_file,
+    from_flexyclass,
     from_none,
     from_options,
     from_string,
@@ -22,6 +24,7 @@ from .logging import configure_logging
 from .resolvers import register, all_resolvers
 from .flexyclasses import flexyclass, flexyfactory
 
+
 __all__ = [
     'all_resolvers',
     'cast',
@@ -31,8 +34,10 @@ __all__ = [
     'field',
     'flexyclass',
     'flexyfactory',
+    'from_dataclass',
     'from_dict',
     'from_file',
+    'from_flexyclass',
     'from_none',
     'from_options',
     'from_string',
