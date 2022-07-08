@@ -1,19 +1,10 @@
 import re
 import shutil
 from textwrap import dedent
-from typing import Callable, Optional, Union, Any, Type
+from typing import Callable, Optional, Union
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
-from typeguard import check_type as typeguard_check_type
-
-
-def check_type(value: Any, type: Type) -> bool:
-    try:
-        typeguard_check_type('', value, type)
-        return True
-    except TypeError:
-        return False
 
 
 def clean_multiline(string: str) -> str:

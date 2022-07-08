@@ -3,12 +3,12 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Optional, Protocol, Type, TypeVar
+from typing import Any, Callable, Optional, Type, TypeVar
 
 from omegaconf import DictConfig
 
 from .core import ConfigType, cast
-from .utils import check_type, clean_multiline
+from .utils import clean_multiline
 
 
 class InitLater(functools.partial):
@@ -62,16 +62,18 @@ class InitLater(functools.partial):
             # note that this only works for top-level init, and
             # does not recursively check.
 
-            # there are some exceptions, for example we do type check
-            # iff we have received a class, and the class is not a protocol
+            try:
+                type_check_out = isinstance(out, self.type_)
+            except TypeError:
+                # Instance check fails if we can't check for type for
+                # some reason, e.g. if self.type_ is none, self.type_ is a
+                # Protocol or self._type is an instance of a class.
+                #
+                # If the instance check fails, we assume that the type check
+                # went through, and return the object
+                type_check_out = True
 
-            do_type_check = (
-                self.type_ is not None
-                and inspect.isclass(self.type_)
-                and not check_type(self.type_, Protocol)
-            )
-
-            if do_type_check and not isinstance(out, self.type_):
+            if not type_check_out:
                 msg = (f"Initialized object `{out}` is not the right type: "
                        f"expected `{self.type_}`, got {type(out)}")
                 raise TypeError(msg)
@@ -155,7 +157,7 @@ class init:
     @classmethod
     def later(
         cls: Type['init'],
-        config: Optional[ConfigType] = None,
+        config: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         **kwargs: Any
@@ -199,7 +201,7 @@ class init:
     @classmethod
     def now(
         cls: Type['init'],
-        config: Optional[ConfigType] = None,
+        config: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         **kwargs: Any
@@ -213,7 +215,7 @@ class init:
 
     def __new__(
         cls: Type['init'],
-        config: Optional[ConfigType] = None,
+        config: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         **kwargs: Any

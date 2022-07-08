@@ -4,6 +4,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, Type, TypeVar
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
+from typing_extensions import dataclass_transform
 
 from .traversal import traverse
 from .types import get_type
@@ -16,6 +17,7 @@ class FlexyClass:
 ClsToFlex = TypeVar('ClsToFlex')
 
 
+@dataclass_transform()
 def flexyclass(cls: Type[ClsToFlex]) -> Type[ClsToFlex]:
     """A flexyclass is like a dataclass, but it supports partial
     specification of properties."""

@@ -5,6 +5,7 @@ from dataclasses import is_dataclass
 from inspect import isclass
 from pathlib import Path
 from typing import Any, Dict, Sequence, Type, Union
+import typing_extensions
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
@@ -20,6 +21,7 @@ class _DataClassMeta(ABCMeta):
         return isclass(subclass) and is_dataclass(subclass)
 
 
+@typing_extensions.dataclass_transform()
 class _DataClass(ABC, metaclass=_DataClassMeta):
     """Generic prototype for a dataclass"""
 
@@ -41,7 +43,6 @@ ConfigType = Union[
     Dict[str, Any],
     str,
     _DataClass,
-    # FlexyClassMeta,
     Path,
     None
 ]
@@ -51,8 +52,6 @@ ConfigType = Union[
 def cast(config: ConfigType, copy: bool = False) -> DictConfig:
     if isinstance(config, _DataClass):
         parsed_config = from_dataclass(config)
-    # elif isclass(config) and issubclass(type(config), FlexyClassMeta):
-    #     return from_flexyclass(config)  # type: ignore
     elif isinstance(config, dict):
         parsed_config = from_dict(config)
     elif isinstance(config, str):
@@ -86,23 +85,6 @@ def from_dataclass(config: Any) -> DictConfig:
     if not isinstance(parsed_config, DictConfig):
         raise TypeError(f'Cannot create dict config from `{config}`')
     return parsed_config
-
-
-# def from_flexyclass(
-#     config: Union[dict, FlexyClassMeta],
-#     **overrides: Any
-# ) -> DictConfig:
-
-#     if isclass(config):
-#         if issubclass(type(config), FlexyClassMeta):
-#             return from_dict(dict(config(**overrides)))
-#         else:
-#             raise TypeError(f'`{config}` was not decorated with @flexyclass')
-#     else:
-#         if isinstance(config, dict):
-#             return from_dict(dict(config))
-#         else:
-#             raise TypeError(f'`{config}` is not a flexy class instance!')
 
 
 @unlock_all_flexyclasses
