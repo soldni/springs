@@ -219,7 +219,7 @@ def wrap_main_method(
 
 
 def cli(
-    config_node_cls: Type[_DataClass],
+    config_node_cls: Type[Any],
     print_fn: Optional[PrintFnProtocol] = None
 ) -> Callable[[MainFnProtocol], DecoratedMainFnProtocol]:
 
