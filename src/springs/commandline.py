@@ -106,8 +106,9 @@ def make_cli_argument_parser(func: MainFnProtocol,
     # add options
     msg = 'A path to a YAML file containing a configuration.'
     ap.add_argument(*make_flags(CliFlags.CONFIG),
-                    default=None,
+                    default=[],
                     help=msg,
+                    nargs='*',
                     metavar='/path/to/config.yaml')
 
     msg = 'Print all default options and CLI flags.'
@@ -183,10 +184,17 @@ def wrap_main_method(
         )
         pu.print(*cli_opts_repr, level_up=1)
 
-    # load cli config and file config;
-    # when merging, cli_config takes precedence over file_config
+    # load options from one or more config files;
+    # if multiple config files are provided,
+    # the latter ones can override the former ones.
+    file_config = from_none()
+    for config_file in opts.config:
+        file_config = merge(file_config, from_file(config_file))
+
+    # load options from cli
     cli_config = from_options(leftover_args)
-    file_config = from_file(opts.config) if opts.config else from_none()
+
+    # merge file and cli config; cli config overrides file config
     input_config = merge(file_config, cli_config)
 
     # print both configs if requested
@@ -219,18 +227,21 @@ def wrap_main_method(
 
 
 def cli(
-    config_node_cls: Type[Any],
+    config_node_cls: Optional[Type[Any]] = None,
     print_fn: Optional[PrintFnProtocol] = None
 ) -> Callable[[MainFnProtocol], DecoratedMainFnProtocol]:
 
-    if not(isclass(config_node_cls) and
-           issubclass(config_node_cls, _DataClass)):
+    if config_node_cls is None:
+        config_node = from_none()
+        name = '<unnamed>'
+
+    elif not(isclass(config_node_cls) and
+             issubclass(config_node_cls, _DataClass)):
         msg = '`config_node` must be be decorated as a dataclass'
         raise ValueError(msg)
-
-    config_node = from_dataclass(config_node_cls)
-
-    name = config_node_cls.__name__
+    else:
+        config_node = from_dataclass(config_node_cls)
+        name = config_node_cls.__name__
 
     def wrapper(func: MainFnProtocol) -> DecoratedMainFnProtocol:
         out = partial(wrap_main_method,

@@ -20,7 +20,8 @@ class configure_logging:
         kwargs['logging_level'] = logging.DEBUG
 
         cls._DEBUG_MODE = True
-        return cls.__new__(*args, **kwargs)
+
+        return cls.__new__(cls, *args, **kwargs)
 
     def __new__(    # type: ignore
         cls: Type['configure_logging'],

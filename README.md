@@ -67,7 +67,8 @@ We can specify them from command line...
 python main.py data.path=/path/to/data model.name=bert-base-uncased
 ```
 
-...or from a YAML config file:
+...or from one or more YAML config files (if multiple, the latter ones override the former ones).
+
 
 ```YAML
 data:
@@ -90,6 +91,20 @@ python main.py -c config.yaml
 ```
 
 Easy, right?
+
+
+### Fine, We Do Support Support Unstructured Configurations
+
+You are not required to used a structured config with Springs.
+To use our CLI with a bunch of yaml files and/or command line arguments, simply decorate your main function with no arguments.
+
+```python
+@sp.cli()
+def main(config)
+    # do stuff
+    ...
+```
+
 
 ### Initializing Object from Configurations
 

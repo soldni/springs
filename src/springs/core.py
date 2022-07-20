@@ -77,6 +77,9 @@ def from_none(*args: Any, **kwargs: Any) -> DictConfig:
 @unlock_all_flexyclasses
 def from_dataclass(config: Any) -> DictConfig:
     """Cast a dataclass to a structured omega config"""
+    if config is None:
+        return from_none()
+
     if not is_dataclass(config):
         raise TypeError(f'`{config}` is not a dataclass!')
 
