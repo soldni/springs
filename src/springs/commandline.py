@@ -9,7 +9,7 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Type, overload
 from omegaconf import DictConfig
 
 from .core import (_DataClass, from_dataclass, from_file, from_options, merge,
-                   traverse, validate)
+                   traverse, validate, from_none)
 from .initialize import InitLater
 from .utils import PrintUtils, clean_multiline
 
@@ -186,7 +186,7 @@ def wrap_main_method(
     # load cli config and file config;
     # when merging, cli_config takes precedence over file_config
     cli_config = from_options(leftover_args)
-    file_config = from_file(opts.config)
+    file_config = from_file(opts.config) if opts.config else from_none()
     input_config = merge(file_config, cli_config)
 
     # print both configs if requested
