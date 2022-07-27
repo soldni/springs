@@ -8,7 +8,7 @@ Just like the springs inside an Omega watch, they help you move with your experi
 
 Springs overlaps in functionality with [Hydra][2], but without all the unnecessary boilerplate.
 
-The current logo for Springs was generated using [DALL·E mini][5].
+The current logo for Springs was generated using [DALL·E 2][5].
 
 ## Philosophy
 
@@ -250,4 +250,4 @@ test_config:
 [2]: https://hydra.cc/
 [3]: https://devblogs.microsoft.com/python/announcing-pylance-fast-feature-rich-language-support-for-python-in-visual-studio-code/
 [4]: https://code.visualstudio.com
-[5]: https://huggingface.co/spaces/dalle-mini/dalle-mini
+[5]: https://openai.com/dall-e-2/

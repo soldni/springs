@@ -10,12 +10,13 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 try:
     from omegaconf._utils import get_type_hint as _get_type_hint
+    GET_TYPE_HINT_AVAILABLE = True
 except ImportError:
-    _get_type_hint = None
+    GET_TYPE_HINT_AVAILABLE = False
 
 
 def get_type_hint(obj: Any, key: Any = None) -> Optional[Type[Any]]:
-    if _get_type_hint:
+    if GET_TYPE_HINT_AVAILABLE:
         return _get_type_hint(obj, key)
     else:
         warnings.warn('get_type_hint could not be imported from '
@@ -78,7 +79,7 @@ def resolve_mapping(type_: Any) -> Union[None, MappingType]:
     return None
 
 
-def resolve_sequence(type_: Any) -> Union[None, Type]:
+def resolve_sequence(type_: Any) -> Union[None, MappingType]:
     origin = get_origin(type_)
 
     if origin is not None and issubclass(origin, abc.Sequence):
@@ -144,9 +145,11 @@ def get_type(config_node: Union[DictConfig, ListConfig],
                     break
             _, typ_ = resolve_optional(typ_)
 
-        elif node_type_hint := resolve_mapping(node_type_hint):
+        elif resolved_node_type_hint := resolve_mapping(node_type_hint):
             # we return the default type that was given to all type hints
-            typ_ = node_type_hint.val
+            typ_ = (resolved_node_type_hint.val if
+                    resolved_node_type_hint is not None
+                    else None)
 
         return typ_
 
@@ -161,4 +164,11 @@ def get_type(config_node: Union[DictConfig, ListConfig],
             # type of a non-existing element, so we rely on type hint
             # if available
             node_type_hint = get_type_hint(config_node)
-            return resolve_sequence(node_type_hint)
+            resolved_node_type_hint = resolve_sequence(node_type_hint)
+
+            # gets around the fact that we might not be able resolve
+            return (resolved_node_type_hint.val if resolved_node_type_hint
+                    is not None else None)
+    else:
+        raise ValueError('Expected a DictConfig or ListConfig object, '
+                         f'got {type(config_node)} instead')

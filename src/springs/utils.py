@@ -52,7 +52,9 @@ class PrintUtils:
                 content = f'{content.rstrip()} '
 
             if isinstance(line, DictConfig):
-                line = OmegaConf.to_container(line)
+                # we ignore type bc we are ok with line being any of
+                # the types returned by omegaconf
+                line = OmegaConf.to_container(line)     # type: ignore
 
             if isinstance(line, dict):
                 content += f'{self.to_yaml(line, level)}\n'

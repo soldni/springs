@@ -3,7 +3,7 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Type, TypeVar, Union
 
 from omegaconf import DictConfig
 
@@ -15,6 +15,9 @@ class InitLater(functools.partial):
 
     # inherits slots from functools.partial
     __slots__ = "type_",
+
+    # must be explicitly defined to avoid mypy error
+    type_: Union[Type[Any], None]
 
     def __new__(cls, func, type_: Optional[type] = None, /, *args, **keywords):
         cl = super().__new__(cls, func, *args, **keywords)
@@ -63,10 +66,14 @@ class InitLater(functools.partial):
             # does not recursively check.
 
             try:
-                type_check_out = isinstance(out, self.type_)
+                # We only type check if the type is provided
+                if self.type_ is not None:
+                    type_check_out = isinstance(out, self.type_)
+                else:
+                    type_check_out = True
             except TypeError:
                 # Instance check fails if we can't check for type for
-                # some reason, e.g. if self.type_ is none, self.type_ is a
+                # some reason, e.g. if self.type_ is None, self.type_ is a
                 # Protocol or self._type is an instance of a class.
                 #
                 # If the instance check fails, we assume that the type check
@@ -175,9 +182,9 @@ class init:
         # try to get the target callable from either the config
         # or keyword arguments passed to the init function
         if cls.TARGET in config_node:
-            fn = cls.callable(config=config_node)
+            fn = cls.callable(config=config_node, _type_=_type_)
         elif cls.TARGET in kwargs:
-            fn = cls.callable(target=kwargs[cls.TARGET])
+            fn = cls.callable(target=kwargs[cls.TARGET], _type_=_type_)
         else:
             raise ValueError(f'Cannot instantiate from `{config_node}` and '
                              f'`{kwargs}`: `{cls.TARGET}` keyword missing')
@@ -213,7 +220,9 @@ class init:
                               **kwargs)
         return init_call()
 
-    def __new__(
+    # ignoring type because we are actually abusing __new__ to
+    # provide a shortcut for init.now
+    def __new__(            # type: ignore
         cls: Type['init'],
         config: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,

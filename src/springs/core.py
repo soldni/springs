@@ -292,7 +292,12 @@ def merge(*configs: ConfigType) -> DictConfig:
 
         _pre_merge_fix_type_mismatches(merged_config, other_config)
         _pre_merge_override_interpolations(merged_config, other_config)
-        merged_config = OmegaConf.merge(merged_config, other_config)
+
+        # ignoring type mypy check since merge_config and other_config are
+        # DictConfig, so the return type is always DictConfig
+        merged_config: DictConfig = OmegaConf.merge(    # type: ignore
+            merged_config, other_config
+        )
 
         #  raise error if we end up with something that is not a DictConfig
         if not isinstance(merged_config, DictConfig):

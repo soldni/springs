@@ -54,7 +54,9 @@ def traverse(
             if isinstance(value, BaseContainer):
                 for spec in traverse(value, include_nodes=include_nodes):
                     yield ParamSpec(key=spec.key,
-                                    path=f'{key}.{spec.path}',
+                                    # we use str(key) here to make sure
+                                    # it's just a string, not an obj repr
+                                    path=f'{str(key)}.{spec.path}',
                                     value=spec.value,
                                     parent=spec.parent)
 
