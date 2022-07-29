@@ -1,5 +1,6 @@
 import inspect
-from dataclasses import dataclass, field
+import warnings
+from dataclasses import Field, dataclass, field, is_dataclass
 from functools import wraps
 from typing import Any, Callable, Dict, Type, TypeVar
 
@@ -8,28 +9,47 @@ from typing_extensions import dataclass_transform
 
 from .traversal import traverse
 from .types import get_type
+from .utils import clean_multiline
 
 
 class FlexyClass:
     ...
 
 
-ClsToFlex = TypeVar("ClsToFlex")
+_T = TypeVar("_T")
 
 
-@dataclass_transform()
-def flexyclass(cls: Type[ClsToFlex]) -> Type[ClsToFlex]:
+@dataclass_transform(field_specifiers=(Field, field))
+def make_flexy(cls_: Type[_T]) -> Type[_T]:
     """A flexyclass is like a dataclass, but it supports partial
     specification of properties."""
 
-    if not inspect.isclass(cls):
-        raise TypeError(f"flexyclass must decorate a class, not {cls}")
+    if not inspect.isclass(cls_) or not is_dataclass(cls_):
+        raise TypeError(f"flexyclass must decorate a dataclass, not {cls_}")
 
     new_cls = type(
-        f"FlexyClass{cls.__name__}", (dataclass(cls), FlexyClass), {}
+        f"FlexyClass{cls_.__name__}", (dataclass(cls_), FlexyClass), {}
     )
 
     return new_cls
+
+
+@dataclass_transform(field_specifiers=(Field, field))
+def flexyclass(cls: Type[_T]) -> Type[_T]:
+    """A flexyclass is like a dataclass, but it supports partial
+    specification of properties."""
+
+    msg = clean_multiline(
+        """
+        Decorating with `flexyclass` is discouraged because it does
+        not play nicely with mypy, resulting in incorrect type annotations.
+        Instead, consider decorating with `@dataclass` first, and then
+        decorating `@make_flexy` on the resulting class.
+    """
+    )
+    warnings.warn(msg, RuntimeWarning, stacklevel=2)
+
+    return make_flexy(dataclass(cls))
 
 
 def flexyfactory(

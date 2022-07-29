@@ -44,3 +44,10 @@ class TestInit(unittest.TestCase):
 
         self.assertIsNotNone(out)
         self.assertEqual(out, SampleClass(**di))
+
+    def test_init_warning(self):
+        config = from_dict(
+            {"_target_": Target.to_string(SampleClass), "a": 1, "b": 2}
+        )
+        with self.assertWarns(RuntimeWarning):
+            init.now(config)

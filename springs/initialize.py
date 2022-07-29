@@ -3,6 +3,7 @@ import importlib
 import importlib.util
 import inspect
 import itertools
+import warnings
 from typing import Any, Callable, Optional, Type, TypeVar, Union
 
 from omegaconf import DictConfig
@@ -186,6 +187,21 @@ class init:
     TARGET: str = "_target_"
 
     @classmethod
+    def _warn_on_missing_type(
+        cls: Type["init"], type_: Union[Type, None], fn_name: str
+    ) -> None:
+        if type_ is None:
+            msg = clean_multiline(
+                f"""
+                It is strongly recommended to provide a _type_ argument
+                to `init.{fn_name}`. This ensures that the correct type is
+                annotated as the return value. Further, it performs type
+                checking on the initialized object.
+            """
+            )
+            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+
+    @classmethod
     def callable(
         cls: Type["init"],
         config: Optional[ConfigType] = None,
@@ -255,6 +271,8 @@ class init:
             An callable that returns an object of type `_type_`.
         """
 
+        cls._warn_on_missing_type(_type_, "later")
+
         # if no config is provided, we return a function
         if config is None:
             return InitLater.no_op()
@@ -319,6 +337,8 @@ class init:
         Returns:
             An object of type `_type_`.
         """
+
+        cls._warn_on_missing_type(_type_, "now")
 
         # notice the use of non-keyword arguments here for config,
         # _type_, and _recursive_. This is because `later` has a `/`

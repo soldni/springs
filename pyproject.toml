@@ -13,6 +13,7 @@ exclude = '''
     | \.venv
     | \bdist\b
     | \bdoc\b
+    | \btmp\b
 )
 '''
 

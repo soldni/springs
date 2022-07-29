@@ -1,7 +1,7 @@
 import re
 import shutil
 from textwrap import dedent
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
@@ -96,3 +96,7 @@ class PrintUtils:
             self.indent(ln, level) for ln in out.strip().split("\n")
         ).rstrip()
         return out
+
+
+T_ = TypeVar("T_")
+FgetType = Callable[..., Any]

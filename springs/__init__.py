@@ -16,7 +16,7 @@ from .core import (
     to_yaml,
     validate,
 )
-from .flexyclasses import flexyclass, flexyfactory
+from .flexyclasses import flexyclass, flexyfactory, make_flexy
 from .initialize import Target, init
 from .logging import configure_logging
 from .resolvers import all_resolvers, register
@@ -41,6 +41,7 @@ __all__ = [
     "get_type",
     "II",
     "init",
+    "make_flexy",
     "merge",
     "MISSING",
     "register",
