@@ -1,5 +1,4 @@
 import inspect
-import warnings
 from dataclasses import Field, dataclass, field, is_dataclass
 from functools import wraps
 from typing import Any, Callable, Dict, Type, TypeVar
@@ -9,7 +8,7 @@ from typing_extensions import dataclass_transform
 
 from .traversal import traverse
 from .types import get_type
-from .utils import clean_multiline
+from .warnings import warn_on_flexyclass_fn
 
 
 class FlexyClass:
@@ -38,17 +37,7 @@ def make_flexy(cls_: Type[_T]) -> Type[_T]:
 def flexyclass(cls: Type[_T]) -> Type[_T]:
     """A flexyclass is like a dataclass, but it supports partial
     specification of properties."""
-
-    msg = clean_multiline(
-        """
-        Decorating with `flexyclass` is discouraged because it does
-        not play nicely with mypy, resulting in incorrect type annotations.
-        Instead, consider decorating with `@dataclass` first, and then
-        decorating `@make_flexy` on the resulting class.
-    """
-    )
-    warnings.warn(msg, RuntimeWarning, stacklevel=2)
-
+    warn_on_flexyclass_fn()
     return make_flexy(dataclass(cls))
 
 

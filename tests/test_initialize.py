@@ -1,4 +1,5 @@
 import unittest
+from typing import Callable
 
 from springs.core import from_dict
 from springs.initialize import Target, init
@@ -51,3 +52,9 @@ class TestInit(unittest.TestCase):
         )
         with self.assertWarns(RuntimeWarning):
             init.now(config)
+
+    def test_init_function(self):
+        config = from_dict({"_target_": "str.lower"})
+        fn = init.later(config, Callable[..., str])
+
+        self.assertEqual(fn("ABC"), "abc")

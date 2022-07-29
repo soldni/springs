@@ -22,6 +22,7 @@ from .logging import configure_logging
 from .resolvers import all_resolvers, register
 from .traversal import traverse
 from .types import get_type
+from .warnings import toggle_warnings
 
 __all__ = [
     "all_resolvers",
@@ -47,6 +48,7 @@ __all__ = [
     "register",
     "SI",
     "Target",
+    "toggle_warnings",
     "to_dict",
     "to_yaml",
     "traverse",

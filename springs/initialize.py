@@ -3,10 +3,11 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-import warnings
 from typing import Any, Callable, Optional, Type, TypeVar, Union
 
 from omegaconf import DictConfig
+
+from springs.warnings import warn_on_missing_type_in_init
 
 from .core import ConfigType, cast
 from .utils import clean_multiline
@@ -171,7 +172,14 @@ class Target:
                 container = cls.from_string(m_name)
             callable_ = getattr(container, c_name, None)
         else:
-            callable_ = globals().get(path, getattr(__builtins__, path, None))
+            # the if isinstance(..., dict) for builtin is so that mypy
+            # does not complain, because __builtins__ is annotated as Any
+            callable_ = globals().get(
+                path,
+                __builtins__.get(path, None)
+                if isinstance(__builtins__, dict)
+                else None,
+            )
 
         if callable_ is None:
             raise ImportError(f"Cannot find callable at {path}")
@@ -185,21 +193,6 @@ CallableT = TypeVar("CallableT", bound=Callable)
 
 class init:
     TARGET: str = "_target_"
-
-    @classmethod
-    def _warn_on_missing_type(
-        cls: Type["init"], type_: Union[Type, None], fn_name: str
-    ) -> None:
-        if type_ is None:
-            msg = clean_multiline(
-                f"""
-                It is strongly recommended to provide a _type_ argument
-                to `init.{fn_name}`. This ensures that the correct type is
-                annotated as the return value. Further, it performs type
-                checking on the initialized object.
-            """
-            )
-            warnings.warn(msg, RuntimeWarning, stacklevel=2)
 
     @classmethod
     def callable(
@@ -271,7 +264,7 @@ class init:
             An callable that returns an object of type `_type_`.
         """
 
-        cls._warn_on_missing_type(_type_, "later")
+        warn_on_missing_type_in_init(_type_, "init.later")
 
         # if no config is provided, we return a function
         if config is None:
@@ -338,7 +331,7 @@ class init:
             An object of type `_type_`.
         """
 
-        cls._warn_on_missing_type(_type_, "now")
+        warn_on_missing_type_in_init(_type_, "init.now")
 
         # notice the use of non-keyword arguments here for config,
         # _type_, and _recursive_. This is because `later` has a `/`

@@ -126,8 +126,13 @@ In your experiment code, run:
 ```python
 def run_model(model_config: ModelConfig):
     ...
-    model = sp.init.now(model_config)
+    model = sp.init.now(model_config, ModelConfig)
 ```
+
+**Note:** Previous versions of Springs supported specifying the return type,
+but now it is actively encouraged. Running `sp.init.now(model_config)` will
+now raise a warning if the type is not provided. To prevent this warning,
+use `sp.toggle_warnings(False)` before calling `sp.init.now`/ `sp.init.later`.
 
 ### `init.now` vs `init.later`
 
@@ -138,7 +143,7 @@ Example:
 
 ```python
 config = sp.from_dict({'_target_': 'str.lower'})
-fn = sp.init.later(config)
+fn = sp.init.later(config, Callable[..., str])
 
 ... # much computation occurs
 
@@ -147,7 +152,7 @@ fn('THIS TO LOWERCASE')     # returns `this to lowercase`
 
 Note that, for convenience `sp.init.now` is aliased to `sp.init`.
 
-### Path as `__target__`
+### Path as `_target_`
 
 If, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
 
@@ -180,10 +185,11 @@ This will raise an error when the tokenizer is not a subclass of `PreTrainedToke
 
 ### Flexible Configurations
 
-Sometimes a configuration has some default parameters, but others are optional and depend on other factors, such as the `_target_` class.  In these cases, it is convenient to set up a flexible dataclass, or `flexyclass`.
+Sometimes a configuration has some default parameters, but others are optional and depend on other factors, such as the `_target_` class.  In these cases, it is convenient to set up a flexible dataclass, using `make_flexy` after the `dataclass` decorator.
 
 ```python
-@sp.flexyclass
+@sp.make_flexy
+@sp.dataclass
 class MetricConfig:
     _target_: str = sp.MISSING
     average: str = 'macro'
@@ -199,6 +205,9 @@ print(config)
 # this will print the following:
 # {'_target_': 'torchmetrics.F1Score', 'average': 'macro', 'num_classes': 2}
 ```
+
+**Note:** In previous version of Springs, the canonical way to create a flexible class was to decorate a class with `@sp.flexyclass`. This method is still there, but it is not encouraged since it creates issues with `mypy` (and potentially other type checkers). Please consider switching to `dataclass` followed by `make_flexy`. To prevent a warning being raised for this, use
+`sp.toggle_warnings(False)` before calling `sp.flexyclass`.
 
 ### Resolvers
 
