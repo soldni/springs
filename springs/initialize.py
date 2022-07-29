@@ -25,7 +25,7 @@ class InitLater(functools.partial):
         _type_: Optional[type] = None,
         /,
         *args,
-        **keywords
+        **keywords,
     ):
         cl = super().__new__(cls, func, *args, **keywords)
         cl.type_ = _type_
@@ -220,9 +220,7 @@ class init:
             try:
                 target = str(config[cls.TARGET])
             except KeyError:
-                raise KeyError(
-                    f"Config `{config}` has no `{cls.TARGET}` key!"
-                )
+                raise KeyError(f"Config `{config}` has no `{cls.TARGET}` key!")
 
         return Target.from_string(target)
 

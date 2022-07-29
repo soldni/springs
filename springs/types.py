@@ -3,8 +3,16 @@ import types
 import warnings
 from collections import abc
 from dataclasses import fields, is_dataclass
-from typing import (Any, NamedTuple, Optional, Tuple, Type, Union, get_args,
-                    get_origin)
+from typing import (
+    Any,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -91,9 +99,7 @@ def resolve_sequence(type_: Any) -> Union[None, MappingType]:
     return None
 
 
-def safe_select(
-    config: DictConfig, key: str, interpolate: bool = True
-) -> Any:
+def safe_select(config: DictConfig, key: str, interpolate: bool = True) -> Any:
     """Selects a key from a config, but returns None if the key
     is missing or the key resolution fails."""
 

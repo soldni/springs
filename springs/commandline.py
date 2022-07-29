@@ -8,8 +8,16 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Type, overload
 
 from omegaconf import DictConfig
 
-from .core import (_DataClass, from_dataclass, from_file, from_none,
-                   from_options, merge, traverse, validate)
+from .core import (
+    _DataClass,
+    from_dataclass,
+    from_file,
+    from_none,
+    from_options,
+    merge,
+    traverse,
+    validate,
+)
 from .initialize import InitLater
 from .utils import PrintUtils, clean_multiline
 
@@ -138,14 +146,10 @@ def make_cli_argument_parser(
     )
 
     msg = "Enter debug mode by setting global logging to DEBUG."
-    ap.add_argument(
-        *make_flags(CliFlags.DEBUG), action="store_true", help=msg
-    )
+    ap.add_argument(*make_flags(CliFlags.DEBUG), action="store_true", help=msg)
 
     msg = "If provided, it does not print the configuration when running."
-    ap.add_argument(
-        *make_flags(CliFlags.QUIET), action="store_true", help=msg
-    )
+    ap.add_argument(*make_flags(CliFlags.QUIET), action="store_true", help=msg)
     return ap
 
 

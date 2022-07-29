@@ -19,27 +19,27 @@ class SampleClass:
 
 class TestInit(unittest.TestCase):
     def test_init_now(self):
-        di = {'a': 1, 'b': 2}
+        di = {"a": 1, "b": 2}
 
-        config = from_dict({'_target_': Target.to_string(SampleClass), **di})
+        config = from_dict({"_target_": Target.to_string(SampleClass), **di})
         out = init.now(config, SampleClass)
 
         self.assertIsNotNone(out)
         self.assertEqual(out, SampleClass(**di))
 
     def test_init_later(self):
-        di = {'a': 1, 'b': 2}
+        di = {"a": 1, "b": 2}
 
-        config = from_dict({'_target_': Target.to_string(SampleClass)})
+        config = from_dict({"_target_": Target.to_string(SampleClass)})
         out_cls = init.later(config, SampleClass)
 
         self.assertIsNotNone(out_cls)
         self.assertEqual(out_cls(**di), SampleClass(**di))
 
     def test_init_now_with_kwargs(self):
-        di = {'a': 1, 'b': 2}
+        di = {"a": 1, "b": 2}
 
-        config = from_dict({'_target_': Target.to_string(SampleClass)})
+        config = from_dict({"_target_": Target.to_string(SampleClass)})
         out = init.now(config, SampleClass, **di)
 
         self.assertIsNotNone(out)

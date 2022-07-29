@@ -234,9 +234,7 @@ def _pre_merge_fix_type_mismatches(
                     # be one, since its type is a dataclass. Therefore, we
                     # first initialize this its node with an empty dataclass,
                     # which will then cause no issue when merging.
-                    merge_into_value = from_dataclass(
-                        merge_into_expected_type
-                    )
+                    merge_into_value = from_dataclass(merge_into_expected_type)
 
                     # merge = False ensure replacement
                     OmegaConf.update(

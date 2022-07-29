@@ -3,9 +3,19 @@ from dataclasses import dataclass, field
 from omegaconf import II, MISSING, SI
 
 from .commandline import cli
-from .core import (cast, from_dataclass, from_dict, from_file, from_none,
-                   from_options, from_string, merge, to_dict, to_yaml,
-                   validate)
+from .core import (
+    cast,
+    from_dataclass,
+    from_dict,
+    from_file,
+    from_none,
+    from_options,
+    from_string,
+    merge,
+    to_dict,
+    to_yaml,
+    validate,
+)
 from .flexyclasses import flexyclass, flexyfactory
 from .initialize import Target, init
 from .logging import configure_logging
