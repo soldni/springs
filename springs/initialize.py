@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 
 from springs.warnings import warn_on_missing_type_in_init
 
-from .core import ConfigType, cast
+from .core import cast
 from .utils import clean_multiline
 
 
@@ -198,8 +198,9 @@ class init:
     def callable(
         cls: Type["init"],
         config: Optional[Any] = None,
-        target: Optional[str] = None,
         _type_: Optional[CallableT] = None,
+        _recursive_: Optional[Any] = None,
+        target: Optional[str] = None,
     ) -> CallableT:
         """Finds a callable function corresponding to the given `target`
         in the config. If no `target` is provided, it looks for `_target_`
