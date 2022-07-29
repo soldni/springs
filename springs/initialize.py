@@ -197,7 +197,7 @@ class init:
     @classmethod
     def callable(
         cls: Type["init"],
-        config: Optional[ConfigType] = None,
+        config: Optional[Any] = None,
         target: Optional[str] = None,
         _type_: Optional[CallableT] = None,
     ) -> CallableT:

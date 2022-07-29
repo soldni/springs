@@ -26,8 +26,9 @@ def make_flexy(cls_: Type[_T]) -> Type[_T]:
     if not inspect.isclass(cls_) or not is_dataclass(cls_):
         raise TypeError(f"flexyclass must decorate a dataclass, not {cls_}")
 
-    new_cls = type(
-        f"FlexyClass{cls_.__name__}", (dataclass(cls_), FlexyClass), {}
+    # type ignore is for pylance, which freaks out a bit otherwise
+    new_cls: Type[_T] = type(                                   # type: ignore
+        f"FlexyClass{cls_.__name__}", (cls_, FlexyClass), {}    # type: ignore
     )
 
     return new_cls
