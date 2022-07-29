@@ -9,22 +9,22 @@ class configure_logging:
     _DEBUG_MODE: bool = False
 
     @classmethod
-    def debug(cls: Type['configure_logging'],
-              *args,
-              **kwargs) -> logging.Logger:
+    def debug(
+        cls: Type["configure_logging"], *args, **kwargs
+    ) -> logging.Logger:
 
-        if 'logging_level' in kwargs:
-            msg = '`logging_level` was provided to `debug`, but it is ignored'
+        if "logging_level" in kwargs:
+            msg = "`logging_level` was provided to `debug`, but it is ignored"
             warnings.warn(msg)
 
-        kwargs['logging_level'] = logging.DEBUG
+        kwargs["logging_level"] = logging.DEBUG
 
         cls._DEBUG_MODE = True
 
         return cls.__new__(cls, *args, **kwargs)
 
-    def __new__(    # type: ignore
-        cls: Type['configure_logging'],
+    def __new__(  # type: ignore
+        cls: Type["configure_logging"],
         logger_name: Optional[str] = None,
         file_logging_path: Optional[Path] = None,
         make_dir_if_missing: bool = True,
@@ -63,21 +63,25 @@ class configure_logging:
             if make_dir_if_missing:
                 file_logging_path.parent.mkdir(parents=True, exist_ok=True)
 
-            path_name = (f'{file_logging_path.stem}'
-                         f'_{current_process().name}'
-                         f'{file_logging_path.suffix}')
+            path_name = (
+                f"{file_logging_path.stem}"
+                f"_{current_process().name}"
+                f"{file_logging_path.suffix}"
+            )
 
             kw = file_handler_kwargs or {}
             root_file_handler = logging.FileHandler(
-                filename=file_logging_path.parent / path_name,
-                **kw
+                filename=file_logging_path.parent / path_name, **kw
             )
             root_file_handler.setFormatter(root_formatter)
             handlers.append(root_file_handler)
 
         # add the handlers to the root logger, force reattaching other loggers
         kw = basic_config_kwargs or {}
-        logging.basicConfig(level=logging_level,
-                            force=force_root_reattach,
-                            handlers=handlers, **kw)
+        logging.basicConfig(
+            level=logging_level,
+            force=force_root_reattach,
+            handlers=handlers,
+            **kw,
+        )
         return logging.getLogger(logger_name)

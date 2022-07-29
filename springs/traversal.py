@@ -19,26 +19,27 @@ class ParamSpec:
 def traverse(
     node: BaseContainer,
     include_nodes: bool = False,
-    include_root: bool = False
+    include_root: bool = False,
 ) -> Iterator[ParamSpec]:
 
     if include_root:
-        yield ParamSpec(key=None, path='', value=node, parent=None)
+        yield ParamSpec(key=None, path="", value=node, parent=None)
 
     if isinstance(node, ListConfig):
         for i, element in enumerate(node):
             if isinstance(element, BaseContainer):
                 for spec in traverse(element, include_nodes=include_nodes):
-                    yield ParamSpec(key=spec.key,
-                                    path=f'[{i}].{spec.path}',
-                                    value=spec.value,
-                                    parent=spec.parent)
+                    yield ParamSpec(
+                        key=spec.key,
+                        path=f"[{i}].{spec.path}",
+                        value=spec.value,
+                        parent=spec.parent,
+                    )
 
             if include_nodes or not isinstance(element, BaseContainer):
-                yield ParamSpec(key=i,
-                                path=f'[{i}]',
-                                value=element,
-                                parent=node)
+                yield ParamSpec(
+                    key=i, path=f"[{i}]", value=element, parent=node
+                )
 
     elif isinstance(node, DictConfig):
         for key in node.keys():
@@ -53,19 +54,22 @@ def traverse(
 
             if isinstance(value, BaseContainer):
                 for spec in traverse(value, include_nodes=include_nodes):
-                    yield ParamSpec(key=spec.key,
-                                    # we use str(key) here to make sure
-                                    # it's just a string, not an obj repr
-                                    path=f'{str(key)}.{spec.path}',
-                                    value=spec.value,
-                                    parent=spec.parent)
+                    yield ParamSpec(
+                        key=spec.key,
+                        # we use str(key) here to make sure
+                        # it's just a string, not an obj repr
+                        path=f"{str(key)}.{spec.path}",
+                        value=spec.value,
+                        parent=spec.parent,
+                    )
 
             if include_nodes or not isinstance(value, BaseContainer):
-                yield ParamSpec(key=str(key),
-                                path=str(key),
-                                value=value,
-                                parent=node)
+                yield ParamSpec(
+                    key=str(key), path=str(key), value=value, parent=node
+                )
 
     else:
-        raise ValueError(f'Cannot traverse `{node}`; DictConfig or ListConfig '
-                         f'expected, but got `{type(node)}`.')
+        raise ValueError(
+            f"Cannot traverse `{node}`; DictConfig or ListConfig "
+            f"expected, but got `{type(node)}`."
+        )

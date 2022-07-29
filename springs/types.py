@@ -1,15 +1,16 @@
 import sys
 import types
+import warnings
 from collections import abc
 from dataclasses import fields, is_dataclass
 from typing import (Any, NamedTuple, Optional, Tuple, Type, Union, get_args,
                     get_origin)
-import warnings
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 try:
     from omegaconf._utils import get_type_hint as _get_type_hint
+
     GET_TYPE_HINT_AVAILABLE = True
 except ImportError:
     GET_TYPE_HINT_AVAILABLE = False
@@ -19,8 +20,10 @@ def get_type_hint(obj: Any, key: Any = None) -> Optional[Type[Any]]:
     if GET_TYPE_HINT_AVAILABLE:
         return _get_type_hint(obj, key)
     else:
-        warnings.warn('get_type_hint could not be imported from '
-                      'omegaconf._utils, falling back to OmegaConf.get_type')
+        warnings.warn(
+            "get_type_hint could not be imported from "
+            "omegaconf._utils, falling back to OmegaConf.get_type"
+        )
         return OmegaConf.get_type(obj, key)
 
 
@@ -52,7 +55,7 @@ def resolve_optional(type_: Any) -> Tuple[bool, Any]:
         if len(args) == 1:
             return optional, args[0]
         elif len(args) >= 2:
-            return optional, Union[args]    # type: ignore
+            return optional, Union[args]  # type: ignore
         else:
             assert False
 
@@ -89,42 +92,44 @@ def resolve_sequence(type_: Any) -> Union[None, MappingType]:
 
 
 def safe_select(
-    config: DictConfig,
-    key: str,
-    interpolate: bool = True
+    config: DictConfig, key: str, interpolate: bool = True
 ) -> Any:
     """Selects a key from a config, but returns None if the key
-        is missing or the key resolution fails."""
+    is missing or the key resolution fails."""
 
-    if key in config and \
-            OmegaConf.is_interpolation(config, key) and \
-            not interpolate:
-        return OmegaConf.to_container(config).get(key, None)    # type: ignore
+    if (
+        key in config
+        and OmegaConf.is_interpolation(config, key)
+        and not interpolate
+    ):
+        return OmegaConf.to_container(config).get(key, None)  # type: ignore
 
     if (key not in config) or OmegaConf.is_missing(config, key):
         return None
     elif OmegaConf.is_interpolation(config, key):
         if interpolate:
             return OmegaConf.select(
-                cfg=config,
-                key=key,
-                throw_on_resolution_failure=False
+                cfg=config, key=key, throw_on_resolution_failure=False
             )
         else:
-            di: dict = OmegaConf.to_container(config)   # type: ignore
+            di: dict = OmegaConf.to_container(config)  # type: ignore
             return di.get(key, None)
     else:
         return OmegaConf.select(cfg=config, key=key)
 
 
-def get_type(config_node: Union[DictConfig, ListConfig],
-             key: Optional[Union[int, str]] = None) -> Union[type, None]:
+def get_type(
+    config_node: Union[DictConfig, ListConfig],
+    key: Optional[Union[int, str]] = None,
+) -> Union[type, None]:
     """Tries to infer the type of a config node key. Reurns None if
     the type cannot be inferred."""
 
     if not isinstance(config_node, (DictConfig, ListConfig)):
-        raise ValueError('Expected a DictConfig or ListConfig object, '
-                         f'got {type(config_node)} instead')
+        raise ValueError(
+            "Expected a DictConfig or ListConfig object, "
+            f"got {type(config_node)} instead"
+        )
 
     if key is None:
         return OmegaConf.get_type(config_node)
@@ -147,15 +152,17 @@ def get_type(config_node: Union[DictConfig, ListConfig],
 
         elif resolved_node_type_hint := resolve_mapping(node_type_hint):
             # we return the default type that was given to all type hints
-            typ_ = (resolved_node_type_hint.val if
-                    resolved_node_type_hint is not None
-                    else None)
+            typ_ = (
+                resolved_node_type_hint.val
+                if resolved_node_type_hint is not None
+                else None
+            )
 
         return typ_
 
     elif isinstance(config_node, ListConfig):
         if not isinstance(key, int):
-            raise ValueError(f'Expected an int key, got {type(key)} instead')
+            raise ValueError(f"Expected an int key, got {type(key)} instead")
 
         if 0 <= key < len(config_node):
             # you asked for type of an existing element
@@ -167,8 +174,13 @@ def get_type(config_node: Union[DictConfig, ListConfig],
             resolved_node_type_hint = resolve_sequence(node_type_hint)
 
             # gets around the fact that we might not be able resolve
-            return (resolved_node_type_hint.val if resolved_node_type_hint
-                    is not None else None)
+            return (
+                resolved_node_type_hint.val
+                if resolved_node_type_hint is not None
+                else None
+            )
     else:
-        raise ValueError('Expected a DictConfig or ListConfig object, '
-                         f'got {type(config_node)} instead')
+        raise ValueError(
+            "Expected a DictConfig or ListConfig object, "
+            f"got {type(config_node)} instead"
+        )
