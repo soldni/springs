@@ -1,8 +1,6 @@
 
 # Springs
 
-![Logo of Springs. Generated using DALL·E mini.](https://github.com/soldni/Springs/raw/main/static/logo.png)
-
 A set of utilities to turn [OmegaConf][1] into a fully fledge configuration utils.
 Just like the springs inside an Omega watch, they help you move with your experiments.
 
@@ -21,23 +19,36 @@ We start by writing the following structure configuration
 ```python
 import springs as sp
 
-@sp.dataclass                   # alias to dataclasses.dataclass
+# sp.dataclasss is an alias 
+# to dataclasses.dataclass
+# this sub-config is for 
+# data settings 
+@sp.dataclass                   
 class DataConfig:
-    path: str = sp.MISSING      # alias to dataclasses.MISSING
+    # sp.MISSING is an alias to
+    # omegaconf.MISSING
+    path: str = sp.MISSING      
     split: str = 'train'
 
+# this sub-config is for 
+# modeling settins
 @sp.dataclass
 class ModelConfig:
     name: str = sp.MISSING
     num_labels: int = 2
 
+
+# this sub-config is for 
+# experiment settings
 @sp.dataclass
 class ExperimentConfig:
     batch_size: int = 16
     seed: int = 42
 
+
+# this is our overall config
 @sp.dataclass
-class Config:                   # this is our overall config
+class Config:                   
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
     exp: ExperimentConfig = ExperimentConfig()
@@ -50,9 +61,14 @@ If we want to use this configuration with a function that actually runs this exp
 ```python
 @sp.cli(Config)
 def main(config: Config)
-    print(config)           # this will print the configuration like a dict
-    config.exp.seed         # you can use dot notation to access attributes...
-    config['exp']['seed']   # ...or treat it like a dictionary!
+    # this will print the configuration 
+    # like a dict
+    print(config)
+    # you can use dot notation to 
+    # access attributes...
+    config.exp.seed         
+    # ...or treat it like a dictionary!
+    config['exp']['seed']   
 
 
 if __name__ == '__main__':
@@ -64,7 +80,9 @@ Notice how, in the configuration `Config` above, some parameters are missing.
 We can specify them from command line...
 
 ```bash
-python main.py data.path=/path/to/data model.name=bert-base-uncased
+python main.py \
+    data.path=/path/to/data \
+    model.name=bert-base-uncased
 ```
 
 ...or from one or more YAML config files (if multiple, the latter ones override the former ones).
@@ -115,9 +133,13 @@ Springs supports this use case, and it is as easy as providing a `_target_` node
 ```python
 @sp.dataclass
 class ModelConfig:
-    _target_: str = \
-        'transformers.AutoModelForSequenceClassification.from_pretrained'
-    pretrained_model_name_or_path: str = 'bert-base-uncased'
+    _target_: str = (
+        'transformers.' 
+        'AutoModelForSequenceClassification.'
+        'from_pretrained'
+    )
+    pretrained_model_name_or_path: str = \
+        'bert-base-uncased'
     num_classes: int = 2
 ```
 
@@ -147,7 +169,8 @@ fn = sp.init.later(config, Callable[..., str])
 
 ... # much computation occurs
 
-fn('THIS TO LOWERCASE')     # returns `this to lowercase`
+# returns `this to lowercase`
+fn('THIS TO LOWERCASE')     
 ```
 
 Note that, for convenience `sp.init.now` is aliased to `sp.init`.
@@ -161,10 +184,13 @@ import transformers
 
 @sp.dataclass
 class ModelConfig:
-    _target_: str = sp.Target.to_string(transformers.
-                                        AutoModelForSequenceClassification.
-                                        from_pretrained)
-    pretrained_model_name_or_path: str = 'bert-base-uncased'
+    _target_: str = sp.Target.to_string(
+        transformers.
+        AutoModelForSequenceClassification.
+        from_pretrained
+    )
+    pretrained_model_name_or_path: str = \
+        'bert-base-uncased'
     num_classes: int = 2
 ```
 
@@ -196,14 +222,21 @@ class MetricConfig:
 
 config = sp.from_flexyclass(MetricConfig)
 overrides = {
-    '_target_': 'torchmetrics.F1Score',    # we override the _target_
-    'num_classes': 2    # this attribute does not exist in the structured config
+    # we override the _target_
+    '_target_': 'torchmetrics.F1Score',    
+    # this attribute does not exist in the 
+    # structured config
+    'num_classes': 2    
 }
 
 config = sp.merge(config, sp.from_dict(overrides))
 print(config)
 # this will print the following:
-# {'_target_': 'torchmetrics.F1Score', 'average': 'macro', 'num_classes': 2}
+# {
+#    '_target_': 'torchmetrics.F1Score', 
+#    'average': 'macro', 
+#    'num_classes': 2
+# }
 ```
 
 **Note:** In previous version of Springs, the canonical way to create a flexible class was to decorate a class with `@sp.flexyclass`. This method is still there, but it is not encouraged since it creates issues with `mypy` (and potentially other type checkers). Please consider switching to `dataclass` followed by `make_flexy`. To prevent a warning being raised for this, use
