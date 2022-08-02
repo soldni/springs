@@ -8,6 +8,12 @@ Springs overlaps in functionality with [Hydra][2], but without all the unnecessa
 
 The current logo for Springs was generated using [DALL·E 2][5].
 
+To install Springs, simply run 
+
+```bash
+pip install springs
+```
+
 ## Philosophy
 
 OmegaConf supports creating configurations in all sorts of manners, but we believe that there are benefits into defining configuration from structured objects, namely dataclass.
