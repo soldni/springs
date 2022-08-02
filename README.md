@@ -101,7 +101,8 @@ data:
 model:
     name: bert-base-uncased
 
-# you can override any part of the config via YAML or CLI
+# you can override any part of 
+# the config via YAML or CLI
 # CLI takes precedence over YAML.
 exp:
     seed: 1337
