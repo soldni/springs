@@ -1,0 +1,6 @@
+theme: jekyll-theme-minimal
+
+title: Springs
+description: A set of utilities to turn Dataclasses into useful configuration managers.
+logo: /static/logo.png
+google_analytics: G-LXRX72YD7R
