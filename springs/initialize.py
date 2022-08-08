@@ -7,10 +7,8 @@ from typing import Any, Callable, Optional, Type, TypeVar, Union
 
 from omegaconf import DictConfig
 
-from springs.warnings import warn_on_missing_type_in_init
-
 from .core import cast
-from .utils import clean_multiline
+from .utils import SpringsWarnings, clean_multiline
 
 
 class InitLater(functools.partial):
@@ -264,8 +262,7 @@ class init:
         Returns:
             An callable that returns an object of type `_type_`.
         """
-
-        warn_on_missing_type_in_init(_type_, "init.later")
+        SpringsWarnings.missing_type(fn_name="init.later", type_=_type_)
 
         # if no config is provided, we return a function
         if config is None:
@@ -331,8 +328,7 @@ class init:
         Returns:
             An object of type `_type_`.
         """
-
-        warn_on_missing_type_in_init(_type_, "init.now")
+        SpringsWarnings.missing_type(fn_name="init.now", type_=_type_)
 
         # notice the use of non-keyword arguments here for config,
         # _type_, and _recursive_. This is because `later` has a `/`

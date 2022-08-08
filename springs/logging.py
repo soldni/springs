@@ -1,8 +1,9 @@
 import logging
-import warnings
 from multiprocessing import current_process
 from pathlib import Path
 from typing import Optional, Type, Union
+
+from .utils import SpringsWarnings
 
 
 class configure_logging:
@@ -14,8 +15,7 @@ class configure_logging:
     ) -> logging.Logger:
 
         if "logging_level" in kwargs:
-            msg = "`logging_level` was provided to `debug`, but it is ignored"
-            warnings.warn(msg)
+            SpringsWarnings.argument("logging_level", "debug")
 
         kwargs["logging_level"] = logging.DEBUG
 

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Optional
 
 from omegaconf import II, MISSING, SI
 
@@ -16,13 +17,18 @@ from .core import (
     to_yaml,
     validate,
 )
-from .flexyclasses import flexyclass, flexyfactory, make_flexy
+from .flexyclasses import flexy_field, flexyclass, make_flexy
 from .initialize import Target, init
 from .logging import configure_logging
 from .resolvers import all_resolvers, register
 from .traversal import traverse
 from .types import get_type
-from .warnings import toggle_warnings
+from .utils import SpringsWarnings
+
+
+def toggle_warnings(value: Optional[bool] = None):
+    SpringsWarnings.toggle(value)
+
 
 __all__ = [
     "all_resolvers",
@@ -32,7 +38,7 @@ __all__ = [
     "dataclass",
     "field",
     "flexyclass",
-    "flexyfactory",
+    "flexy_field",
     "from_dataclass",
     "from_dict",
     "from_file",

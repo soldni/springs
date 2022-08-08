@@ -1,7 +1,10 @@
+import os
 import re
 import shutil
+import warnings
+from ast import literal_eval
 from textwrap import dedent
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, Type, Union
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
@@ -98,5 +101,54 @@ class PrintUtils:
         return out
 
 
-T_ = TypeVar("T_")
-FgetType = Callable[..., Any]
+class SpringsWarnings:
+    _WARNINGS = literal_eval(os.environ.get("SPRINGS_WARNINGS", "True"))
+
+    @classmethod
+    def toggle(cls, value: Optional[bool] = None):
+        if value is None:
+            value = not cls._WARNINGS
+        cls._WARNINGS = value
+
+    @classmethod
+    def _warn(
+        cls: Type["SpringsWarnings"],
+        message: str,
+        category: Type[Warning],
+        stacklevel: int = 2,
+    ):
+        if cls._WARNINGS:
+            warnings.warn(message, category, stacklevel=stacklevel)
+
+    @classmethod
+    def missing_type(cls: Type["SpringsWarnings"], fn_name: str, type_: Any):
+        if type_ is None:
+            cls._warn(
+                clean_multiline(
+                    f"""It is strongly recommended to provide a _type_ argument
+                        to `{fn_name}`. This ensures that the correct type is
+                        annotated as the return value. Further, it performs
+                        type checking on the initialized object."""
+                ),
+                category=RuntimeWarning,
+            )
+
+    @classmethod
+    def flexyclass(cls: Type["SpringsWarnings"]):
+        cls._warn(
+            clean_multiline(
+                """Decorating with `flexyclass` is discouraged because it
+                   does not play nicely with mypy, resulting in incorrect
+                   type annotations. Instead, consider decorating with
+                   `@springs.dataclass` first, and then decorating
+                   `@springs.make_flexy` on the resulting class."""
+            ),
+            category=RuntimeWarning,
+        )
+
+    @classmethod
+    def argument(cls: Type["SpringsWarnings"], arg_name: str, obj_name: str):
+        cls._warn(
+            f"'{arg_name}' was provided to `{obj_name}`, but it is ignored",
+            category=SyntaxWarning,
+        )
