@@ -1,12 +1,10 @@
-from abc import ABC, ABCMeta
 from collections import abc
 from copy import deepcopy
 from dataclasses import is_dataclass
-from inspect import isclass
 from pathlib import Path
-from typing import Any, Dict, Sequence, Type, Union
+from typing import Any, Dict, Sequence, Union
 
-import typing_extensions
+
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
 
@@ -15,41 +13,9 @@ from .traversal import traverse
 from .types import get_type, safe_select
 
 
-class _DataClassMeta(ABCMeta):
-    def __subclasscheck__(cls: "_DataClassMeta", subclass: Any) -> bool:
-        return isclass(subclass) and is_dataclass(subclass)
-
-
-@typing_extensions.dataclass_transform()
-class _DataClass(ABC, metaclass=_DataClassMeta):
-    """Generic prototype for a dataclass"""
-
-    __dataclass_fields__: Dict[str, Any]
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        ...
-
-    def __instancecheck__(self, __instance: Any) -> bool:
-        return is_dataclass(__instance)
-
-
-########################################
-
-
-ConfigType = Union[
-    DictConfig,
-    Dict[DictKeyType, Any],
-    Dict[str, Any],
-    str,
-    _DataClass,
-    Path,
-    None,
-]
-
-
 @unlock_all_flexyclasses
-def cast(config: ConfigType, copy: bool = False) -> DictConfig:
-    if isinstance(config, _DataClass):
+def cast(config: Any, copy: bool = False) -> DictConfig:
+    if is_dataclass(config):
         parsed_config = from_dataclass(config)
     elif isinstance(config, dict):
         parsed_config = from_dict(config)
@@ -146,18 +112,16 @@ def from_options(opts: Sequence[str]) -> DictConfig:
     return config
 
 
-def to_yaml(config: Union[DictConfig, _DataClass, Type[_DataClass]]) -> str:
+def to_yaml(config: Any) -> str:
     """Convert a omegaconf config to a YAML string"""
     if not isinstance(config, DictConfig):
         config = from_dataclass(config)
     return OmegaConf.to_yaml(config)
 
 
-def to_dict(
-    config: Union[DictConfig, _DataClass, Type[_DataClass]]
-) -> Dict[DictKeyType, Any]:
+def to_dict(config: Any) -> Dict[DictKeyType, Any]:
     """Convert a omegaconf config to a Python primitive type"""
-    if isinstance(config, _DataClass):
+    if is_dataclass(config):
         config = from_dataclass(config)
     container = OmegaConf.to_container(config)
 
@@ -170,7 +134,7 @@ def to_dict(
 ########################################
 
 
-def validate(config_node: ConfigType) -> DictConfig:
+def validate(config_node: Any) -> DictConfig:
     """Check if all attributes are resolve and not missing"""
 
     if not isinstance(config_node, DictConfig):
@@ -283,12 +247,15 @@ def _pre_merge_override_interpolations(
             )
 
 
-def merge(*configs: ConfigType) -> DictConfig:
+def merge(*configs: Any) -> DictConfig:
     """Merges multiple configurations into one."""
 
     if not configs:
         # no configs were provided, return an empty config
         return from_none()
+
+    if not all(isinstance(c, DictConfig) for c in configs):
+        raise TypeError(f"`{configs}` is not a list of DictConfigs!")
 
     # make sure all configs are DictConfigs
     merged_config, *other_configs = (

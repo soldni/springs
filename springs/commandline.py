@@ -1,3 +1,4 @@
+from dataclasses import is_dataclass
 import os
 from argparse import ArgumentParser
 from enum import Enum
@@ -9,7 +10,6 @@ from typing import Any, Callable, Optional, Protocol, Sequence, Type, overload
 from omegaconf import DictConfig
 
 from .core import (
-    _DataClass,
     from_dataclass,
     from_file,
     from_none,
@@ -251,9 +251,7 @@ def cli(
         config_node = from_none()
         name = "<unnamed>"
 
-    elif not (
-        isclass(config_node_cls) and issubclass(config_node_cls, _DataClass)
-    ):
+    elif not (isclass(config_node_cls) and is_dataclass(config_node_cls)):
         msg = "`config_node` must be be decorated as a dataclass"
         raise ValueError(msg)
     else:

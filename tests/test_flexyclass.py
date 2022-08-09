@@ -16,6 +16,12 @@ class FlexyConfigContainer:
     f2: FlexyConfig = flexy_field(FlexyConfig, a=1, b=2)
 
 
+@sp.make_flexy
+@sp.dataclass
+class PipelineStepConfig:
+    _target_: str = sp.MISSING
+
+
 class TestFlexyClass(unittest.TestCase):
     def test_flexyclass(self):
         di = {"a": 1, "b": 2}

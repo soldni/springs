@@ -31,12 +31,12 @@ class InitLater(functools.partial):
         cl.type_ = _type_
         return cl
 
-    def get_kw(self: "InitLater", *args, **kwargs):
+    def get_kw(self: "InitLater", *args, **kwargs) -> Any:
         """Shortcut for accessing parameters that have been
         provided to an InitLater object"""
         return self.keywords.get(*args, **kwargs)
 
-    def pop_kw(self: "InitLater", *args, **kwargs):
+    def pop_kw(self: "InitLater", *args, **kwargs) -> Any:
         """Shortcut for popping parameters that have been
         provided to an InitLater object"""
         return self.keywords.pop(*args, **kwargs)
