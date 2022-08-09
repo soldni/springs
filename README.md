@@ -8,7 +8,7 @@ Springs overlaps in functionality with [Hydra][2], but without all the unnecessa
 
 The current logo for Springs was generated using [DALL·E 2][5].
 
-To install Springs, simply run 
+To install Springs, simply run
 
 ```bash
 pip install springs
@@ -24,37 +24,36 @@ We start by writing the following structure configuration
 
 ```python
 import springs as sp
+from dataclasses import dataclass
 
-# sp.dataclasss is an alias 
-# to dataclasses.dataclass
-# this sub-config is for 
-# data settings 
-@sp.dataclass                   
+# this sub-config is for
+# data settings
+@dataclass
 class DataConfig:
     # sp.MISSING is an alias to
     # omegaconf.MISSING
-    path: str = sp.MISSING      
+    path: str = sp.MISSING
     split: str = 'train'
 
-# this sub-config is for 
-# modeling settins
-@sp.dataclass
+# this sub-config is for
+# model settings
+@dataclass
 class ModelConfig:
     name: str = sp.MISSING
     num_labels: int = 2
 
 
-# this sub-config is for 
+# this sub-config is for
 # experiment settings
-@sp.dataclass
+@dataclass
 class ExperimentConfig:
     batch_size: int = 16
     seed: int = 42
 
 
 # this is our overall config
-@sp.dataclass
-class Config:                   
+@dataclass
+class Config:
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
     exp: ExperimentConfig = ExperimentConfig()
@@ -67,14 +66,14 @@ If we want to use this configuration with a function that actually runs this exp
 ```python
 @sp.cli(Config)
 def main(config: Config)
-    # this will print the configuration 
+    # this will print the configuration
     # like a dict
     print(config)
-    # you can use dot notation to 
+    # you can use dot notation to
     # access attributes...
-    config.exp.seed         
+    config.exp.seed
     # ...or treat it like a dictionary!
-    config['exp']['seed']   
+    config['exp']['seed']
 
 
 if __name__ == '__main__':
@@ -101,7 +100,7 @@ data:
 model:
     name: bert-base-uncased
 
-# you can override any part of 
+# you can override any part of
 # the config via YAML or CLI
 # CLI takes precedence over YAML.
 exp:
@@ -138,10 +137,10 @@ instantiate an object from it.
 Springs supports this use case, and it is as easy as providing a `_target_` node in a configuration:
 
 ```python
-@sp.dataclass
+@dataclass
 class ModelConfig:
     _target_: str = (
-        'transformers.' 
+        'transformers.'
         'AutoModelForSequenceClassification.'
         'from_pretrained'
     )
@@ -177,7 +176,7 @@ fn = sp.init.later(config, Callable[..., str])
 ... # much computation occurs
 
 # returns `this to lowercase`
-fn('THIS TO LOWERCASE')     
+fn('THIS TO LOWERCASE')
 ```
 
 Note that, for convenience `sp.init.now` is aliased to `sp.init`.
@@ -189,7 +188,7 @@ If, for some reason, cannot specify the path to a class as a string, you can use
 ```python
 import transformers
 
-@sp.dataclass
+@dataclass
 class ModelConfig:
     _target_: str = sp.Target.to_string(
         transformers.
@@ -222,7 +221,7 @@ Sometimes a configuration has some default parameters, but others are optional a
 
 ```python
 @sp.make_flexy
-@sp.dataclass
+@dataclass
 class MetricConfig:
     _target_: str = sp.MISSING
     average: str = 'macro'
@@ -230,18 +229,18 @@ class MetricConfig:
 config = sp.from_flexyclass(MetricConfig)
 overrides = {
     # we override the _target_
-    '_target_': 'torchmetrics.F1Score',    
-    # this attribute does not exist in the 
+    '_target_': 'torchmetrics.F1Score',
+    # this attribute does not exist in the
     # structured config
-    'num_classes': 2    
+    'num_classes': 2
 }
 
 config = sp.merge(config, sp.from_dict(overrides))
 print(config)
 # this will print the following:
 # {
-#    '_target_': 'torchmetrics.F1Score', 
-#    'average': 'macro', 
+#    '_target_': 'torchmetrics.F1Score',
+#    'average': 'macro',
 #    'num_classes': 2
 # }
 ```

@@ -3,10 +3,9 @@ import sys
 from argparse import ArgumentParser
 from dataclasses import is_dataclass
 from enum import Enum
-from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, Type, TypeVar, Union
+from typing import Any, Callable, Optional, Sequence, Type, TypeVar
 
 from omegaconf import DictConfig
 from typing_extensions import Concatenate, ParamSpec
@@ -20,7 +19,6 @@ from .core import (
     traverse,
     validate,
 )
-from .initialize import InitLater
 from .utils import PrintUtils, clean_multiline
 
 # parameters for the main function
@@ -223,7 +221,7 @@ def wrap_main_method(
         sys.exit(0)
     else:
         # we execute the main method and pass the parsed config to it
-        return func(parsed_config, **kwargs)
+        return func(parsed_config, *args, **kwargs)
 
 
 def cli(
@@ -260,9 +258,11 @@ def cli(
             # annotations for mypy.
             return wrap_main_method(
                 func,
-                name=name,
-                config_node=config_node,
-                print_fn=print_fn,
+                name,
+                config_node,
+                print_fn,
+                *args,
+                **kwargs,
             )
 
         return wrapping
