@@ -1,13 +1,15 @@
-from dataclasses import is_dataclass
 import os
+import sys
 from argparse import ArgumentParser
+from dataclasses import is_dataclass
 from enum import Enum
-from functools import partial
+from functools import partial, wraps
 from inspect import getfile, getfullargspec, isclass
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol, Sequence, Type, overload
+from typing import Any, Callable, Optional, Sequence, Type, TypeVar, Union
 
 from omegaconf import DictConfig
+from typing_extensions import Concatenate, ParamSpec
 
 from .core import (
     from_dataclass,
@@ -20,6 +22,15 @@ from .core import (
 )
 from .initialize import InitLater
 from .utils import PrintUtils, clean_multiline
+
+# parameters for the main function
+MP = ParamSpec("MP")
+
+# type for the configuration
+CT = TypeVar("CT")
+
+# return type for main function
+RT = TypeVar("RT")
 
 
 class CliFlags(Enum):
@@ -37,32 +48,7 @@ def make_flags(opt_name: CliFlags) -> Sequence[str]:
     return f"-{opt_name.value[0]}", f"--{opt_name.value}"
 
 
-class MainFnProtocol(Protocol):
-    __name__: str
-
-    @overload
-    def __call__(self, config: Any) -> Any:
-        ...
-
-    @overload
-    def __call__(self, config: Any, *args: Any) -> Any:
-        ...
-
-    def __call__(self, config: Any, *args: Any, **kwargs: Any) -> Any:
-        ...
-
-
-class PrintFnProtocol(Protocol):
-    def __call__(self, txt: str, /, *args: Any, **kwargs: Any) -> None:
-        ...
-
-
-class DecoratedMainFnProtocol(Protocol):
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        ...
-
-
-def check_if_callable_can_be_decorated(func: MainFnProtocol):
+def check_if_callable_can_be_decorated(func: Callable):
     expected_args = getfullargspec(func).args
     if len(expected_args) == 0:
         msg = (
@@ -81,7 +67,7 @@ def check_if_callable_can_be_decorated(func: MainFnProtocol):
         raise RuntimeError(msg)
 
 
-def check_if_valid_main_args(func: MainFnProtocol, args: Sequence[Any]):
+def check_if_valid_main_args(func: Callable, args: Sequence[Any]):
     if len(args):
         msg = (
             f"After decorating `{func.__name__}` with "
@@ -92,9 +78,7 @@ def check_if_valid_main_args(func: MainFnProtocol, args: Sequence[Any]):
         raise RuntimeError(msg)
 
 
-def make_cli_argument_parser(
-    func: MainFnProtocol, name: str
-) -> ArgumentParser:
+def make_cli_argument_parser(func: Callable, name: str) -> ArgumentParser:
     """Sets up argument parser ahead of running the CLI. This includes
     creating a help message, and adding a series of flags."""
 
@@ -154,13 +138,13 @@ def make_cli_argument_parser(
 
 
 def wrap_main_method(
-    func: MainFnProtocol,
+    func: Callable[Concatenate[Any, MP], RT],
     name: str,
     config_node: DictConfig,
     print_fn: Optional[Callable] = None,
-    *args: Any,
-    **kwargs: Any,
-) -> Any:
+    *args: MP.args,
+    **kwargs: MP.kwargs,
+) -> RT:
 
     if not isinstance(config_node, DictConfig):
         raise TypeError("Config node must be a DictConfig")
@@ -221,7 +205,7 @@ def wrap_main_method(
     if do_no_run and not opts.parsed:
         # if the user hasn't requested to print the parsed config
         # and we are not running the main program, we can exit here.
-        return InitLater.no_op()
+        sys.exit(0)
 
     # load configuration with node parsers
     parsed_config = merge(config_node, input_config)
@@ -236,16 +220,27 @@ def wrap_main_method(
     if do_no_run:
         # we are not running because the user has requested to print
         # either the options, inputs, or parsed config.
-        return InitLater.no_op()
+        sys.exit(0)
     else:
         # we execute the main method and pass the parsed config to it
         return func(parsed_config, **kwargs)
 
 
 def cli(
-    config_node_cls: Optional[Type[Any]] = None,
-    print_fn: Optional[PrintFnProtocol] = None,
-) -> Callable[[MainFnProtocol], DecoratedMainFnProtocol]:
+    config_node_cls: Optional[Type[CT]] = None,
+    print_fn: Optional[Callable] = None,
+) -> Callable[
+    [
+        # this is a main method that takes as first input a parsed config
+        Callable[Concatenate[CT, MP], RT]
+    ],
+    # the decorated method doesn't expect the parsed config as first input,
+    # since that will be parsed from the command line
+    Callable[MP, RT],
+]:
+    """
+    TODO[lucas]: write doc
+    """
 
     if config_node_cls is None:
         config_node = from_none()
@@ -258,14 +253,18 @@ def cli(
         config_node = from_dataclass(config_node_cls)
         name = config_node_cls.__name__
 
-    def wrapper(func: MainFnProtocol) -> DecoratedMainFnProtocol:
-        out = partial(
-            wrap_main_method,
-            func=func,
-            name=name,
-            config_node=config_node,
-            print_fn=print_fn,
-        )
-        return out
+    def wrapper(func: Callable[Concatenate[CT, MP], RT]) -> Callable[MP, RT]:
+        def wrapping(*args: MP.args, **kwargs: MP.kwargs) -> RT:
+            # I could have used a functools.partial here, but defining
+            # my own function instead allows me to provide nice typing
+            # annotations for mypy.
+            return wrap_main_method(
+                func,
+                name=name,
+                config_node=config_node,
+                print_fn=print_fn,
+            )
+
+        return wrapping
 
     return wrapper

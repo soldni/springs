@@ -3,7 +3,16 @@ import importlib
 import importlib.util
 import inspect
 import itertools
-from typing import Any, Callable, Optional, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 
 from omegaconf import DictConfig
 
@@ -189,7 +198,7 @@ InitT = TypeVar("InitT")
 CallableT = TypeVar("CallableT", bound=Callable)
 
 
-class init:
+class init(Generic[InitT, CallableT]):
     TARGET: str = "_target_"
 
     @classmethod
@@ -231,6 +240,30 @@ class init:
                 raise KeyError(f"Config `{config}` has no `{cls.TARGET}` key!")
 
         return Target.from_string(target)
+
+    @overload
+    @classmethod
+    def later(
+        cls: Type["init"],
+        config: Any,
+        _type_: Type[InitT],
+        _recursive_: bool = True,
+        /,
+        **kwargs: Any,
+    ) -> Callable[..., InitT]:
+        ...
+
+    @overload
+    @classmethod
+    def later(
+        cls: Type["init"],
+        config: Optional[Any] = None,
+        _type_: Optional[Type[InitT]] = None,
+        _recursive_: bool = True,
+        /,
+        **kwargs: Any,
+    ) -> Any:
+        ...
 
     @classmethod
     def later(
@@ -301,6 +334,30 @@ class init:
 
         return InitLater(fn, _type_, **init_call_dict)
 
+    @overload
+    @classmethod
+    def now(
+        cls: Type["init"],
+        config: Any,
+        _type_: Type[InitT],
+        _recursive_: bool = True,
+        /,
+        **kwargs: Any,
+    ) -> InitT:
+        ...
+
+    @overload
+    @classmethod
+    def now(
+        cls: Type["init"],
+        config: Optional[Any] = None,
+        _type_: Optional[Type[InitT]] = None,
+        _recursive_: bool = True,
+        /,
+        **kwargs: Any,
+    ) -> Any:
+        ...
+
     @classmethod
     def now(
         cls: Type["init"],
@@ -339,18 +396,5 @@ class init:
         )
         return init_call()
 
-    def __new__(  # type: ignore
-        cls: Type["init"],
-        config: Optional[Any] = None,
-        _type_: Optional[Type[InitT]] = None,
-        _recursive_: bool = True,
-        /,
-        **kwargs: Any,
-    ) -> InitT:
-        """Convenience shortcut for `init.now`."""
-
-        # notice the use of non-keyword arguments here for config,
-        # _type_, and _recursive_. This is because `now` has a `/`
-        # in its signature, which is required to ensure that **kwargs
-        # works well with type annotations.
-        return cls.now(config, _type_, _recursive_, **kwargs)
+    """Convenience shortcut for `init.now`"""
+    __init__: Callable[..., InitT] = now  # type: ignore

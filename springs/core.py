@@ -4,7 +4,6 @@ from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any, Dict, Sequence, Union
 
-
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
 
