@@ -195,6 +195,7 @@ class Target:
 
 
 InitT = TypeVar("InitT")
+InitNestedT = TypeVar("InitNestedT")
 CallableT = TypeVar("CallableT", bound=Callable)
 
 
@@ -204,7 +205,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def callable(
         cls: Type["init"],
-        config: Optional[Any] = None,
+        _config_: Optional[Any] = None,
         _type_: Optional[CallableT] = None,
         _recursive_: Optional[Any] = None,
         target: Optional[str] = None,
@@ -230,14 +231,16 @@ class init(Generic[InitT, CallableT]):
             A callable function that can be used to instantiate an object.
         """
 
-        if target is not None and config is not None:
+        if target is not None and _config_ is not None:
             raise ValueError("Cannot specify both `target` and `config`")
         elif target is None:
-            config = cast(config)
+            _config_ = cast(_config_)
             try:
-                target = str(config[cls.TARGET])
+                target = str(_config_[cls.TARGET])
             except KeyError:
-                raise KeyError(f"Config `{config}` has no `{cls.TARGET}` key!")
+                raise KeyError(
+                    f"Config `{_config_}` has no `{cls.TARGET}` key!"
+                )
 
         return Target.from_string(target)
 
@@ -245,7 +248,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def later(
         cls: Type["init"],
-        config: Any,
+        _config_: Any,
         _type_: Type[InitT],
         _recursive_: bool = True,
         /,
@@ -257,7 +260,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def later(
         cls: Type["init"],
-        config: Optional[Any] = None,
+        _config_: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         /,
@@ -268,7 +271,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def later(
         cls: Type["init"],
-        config: Optional[Any] = None,
+        _config_: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         /,
@@ -298,16 +301,16 @@ class init(Generic[InitT, CallableT]):
         SpringsWarnings.missing_type(fn_name="init.later", type_=_type_)
 
         # if no config is provided, we return a function
-        if config is None:
+        if _config_ is None:
             return InitLater.no_op()
 
         # ensure we are working with a ConfigDict
-        config_node = cast(config)
+        config_node = cast(_config_)
 
         # try to get the target callable from either the config
         # or keyword arguments passed to the init function
         if cls.TARGET in config_node:
-            fn = cls.callable(config=config_node, _type_=_type_)
+            fn = cls.callable(_config_=config_node, _type_=_type_)
         elif cls.TARGET in kwargs:
             fn = cls.callable(target=kwargs[cls.TARGET], _type_=_type_)
         else:
@@ -316,18 +319,84 @@ class init(Generic[InitT, CallableT]):
                 f"`{kwargs}`: `{cls.TARGET}` keyword missing"
             )
 
-        def _recursive_init(param):
+        def _recursive_init(
+            param: Union[dict, DictConfig, None], type_: Optional[type] = None
+        ) -> Any:
+            """Given one of the parameters for the object that we are
+            trying to instantiate, plus optionally its expected type, this
+            function will try to instantiate the parameter if it is a nested
+            config AND if _recursive_ is True.
+            """
             must_recursive_init = (
+                # we are operating in recursive mode
                 _recursive_
+                # the parameter is a nested config
                 and isinstance(param, (DictConfig, dict))
+                # the nested config has a TARGET property
                 and cls.TARGET in param
             )
             if must_recursive_init:
-                param = cls.later(config=param, _recursive_=True)
-            return param
+                # we initialize recursively
+                return cls.later(param, type_, _recursive_)
+            else:
+                # we simply return the parameter
+                return param
+
+        def _find_child_type(
+            cls_: Union[None, type], attr_name: str
+        ) -> Union[None, type]:
+            """Given the type the object we are initializing is expected to be,
+            as well as the name of the attribute we are about to pass to its
+            initializer, this function figures out the expected type using
+            a combination of class annotations and __init__ annotations.
+
+            If the type the attribute should be cannot be determined, it
+            simply returns None.
+
+            An example:
+
+            ```python
+            class Test1:
+                def __init__(self, a: int):
+                    ...
+
+            print(_find_child_type(Test1, "a")) # prints "int"
+
+            class Test2:
+                a: float
+
+                def __init__(self, a):
+                    ...
+
+            print(_find_child_type(Test2, "a")) # prints "float"
+
+            class Test3:
+                def __init__(self, a):
+                    ...
+
+            print(_find_child_type(Test3, "a")) # prints "None"
+            ```
+            """
+
+            if cls_ is None:
+                # if the class is None, we don't perform any checks
+                return None
+
+            if attr_name in (parent_anns := inspect.get_annotations(cls_)):
+                return parent_anns[attr_name]
+
+            if attr_name in (
+                parent_anns := inspect.getfullargspec(cls_).annotations
+            ):
+                return parent_anns[attr_name]
+
+            # this is the case where we cannot resolve anything
+            return None
 
         init_call_dict = {
-            str(k): _recursive_init(v)
+            str(k): _recursive_init(
+                param=v, type_=_find_child_type(cls_=_type_, attr_name=str(k))
+            )
             for k, v in {**config_node, **kwargs}.items()
             if k != cls.TARGET
         }
@@ -338,7 +407,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def now(
         cls: Type["init"],
-        config: Any,
+        _config_: Any,
         _type_: Type[InitT],
         _recursive_: bool = True,
         /,
@@ -350,7 +419,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def now(
         cls: Type["init"],
-        config: Optional[Any] = None,
+        _config_: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         /,
@@ -361,7 +430,7 @@ class init(Generic[InitT, CallableT]):
     @classmethod
     def now(
         cls: Type["init"],
-        config: Optional[Any] = None,
+        _config_: Optional[Any] = None,
         _type_: Optional[Type[InitT]] = None,
         _recursive_: bool = True,
         /,
@@ -392,9 +461,9 @@ class init(Generic[InitT, CallableT]):
         # in its signature, which is required to ensure that **kwargs
         # works well with type annotations.
         init_call: Callable[..., InitT] = cls.later(
-            config, _type_, _recursive_, **kwargs
+            _config_, _type_, _recursive_, **kwargs
         )
         return init_call()
 
     """Convenience shortcut for `init.now`"""
-    __init__: Callable[..., InitT] = now  # type: ignore
+    __new__: Callable[..., InitT] = now  # type: ignore
