@@ -15,6 +15,7 @@ from typing import (
 )
 
 from omegaconf import DictConfig
+from get_annotations import get_annotations
 
 from .core import cast
 from .utils import SpringsWarnings, clean_multiline
@@ -382,7 +383,7 @@ class init(Generic[InitT, CallableT]):
                 # if the class is None, we don't perform any checks
                 return None
 
-            if attr_name in (parent_anns := inspect.get_annotations(cls_)):
+            if attr_name in (parent_anns := get_annotations(cls_)):
                 return parent_anns[attr_name]
 
             if attr_name in (
