@@ -50,7 +50,7 @@ class TestInit(unittest.TestCase):
         config = from_dict(
             {"_target_": Target.to_string(SampleClass), "a": 1, "b": 2}
         )
-        with self.assertWarns(RuntimeWarning):
+        with self.assertWarns(UserWarning):
             init.now(config)
 
     def test_init_function(self):

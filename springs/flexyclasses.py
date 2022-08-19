@@ -1,12 +1,5 @@
 import inspect
-from dataclasses import (
-    Field,
-    dataclass,
-    field,
-    fields,
-    is_dataclass,
-    make_dataclass,
-)
+from dataclasses import dataclass, field, fields, is_dataclass, make_dataclass
 from functools import wraps
 from typing import Any, Callable, Type, TypeVar
 
@@ -17,16 +10,15 @@ from .traversal import traverse
 from .types import get_type
 from .utils import SpringsWarnings
 
+DT = TypeVar("DT")
+
 
 class FlexyClass:
     ...
 
 
-T_ = TypeVar("T_")
-
-
-@dataclass_transform(field_specifiers=(Field, field))
-def make_flexy(cls_: Type[T_]) -> Type[T_]:
+@dataclass_transform()
+def make_flexy(cls_: Type[DT]) -> Type[DT]:
     """A flexyclass is like a dataclass, but it supports partial
     specification of properties."""
 
@@ -34,22 +26,22 @@ def make_flexy(cls_: Type[T_]) -> Type[T_]:
         raise TypeError(f"flexyclass must decorate a dataclass, not {cls_}")
 
     # type ignore is for pylance, which freaks out a bit otherwise
-    new_cls: Type[T_] = type(  # type: ignore
+    new_cls: Type[DT] = type(
         f"FlexyClass{cls_.__name__}", (cls_, FlexyClass), {}  # type: ignore
     )
 
     return new_cls
 
 
-@dataclass_transform(field_specifiers=(Field, field))
-def flexyclass(cls: Type[T_]) -> Type[T_]:
+@dataclass_transform()
+def flexyclass(cls: Type[DT]) -> Type[DT]:  # type: ignore
     """A flexyclass is like a dataclass, but it supports partial
     specification of properties."""
     SpringsWarnings.flexyclass()
-    return make_flexy(dataclass(cls))
+    return make_flexy(dataclass(cls))  # type: ignore
 
 
-def flexy_field(type_: Type[T_], /, **kwargs: Any) -> T_:
+def flexy_field(type_: Type[DT], /, **kwargs: Any) -> DT:
     """A flexy_ field is like dataclass.field, but it supports
     passing arbitrary keyword arguments to a flexyclass.
 
@@ -57,6 +49,7 @@ def flexy_field(type_: Type[T_], /, **kwargs: Any) -> T_:
         type_: The flexyclass this field is for.
         kwargs: Any keyword arguments to pass to the flexyclass.
     """
+    SpringsWarnings.flexyfield()
 
     if not issubclass(type_, FlexyClass) and not is_dataclass(type_):
         raise TypeError(f"flexy_field must receive a flexyclass, not {type_}")
@@ -84,7 +77,7 @@ def flexy_field(type_: Type[T_], /, **kwargs: Any) -> T_:
     else:
         cls_ = type_
 
-    new_field: T_ = field(
+    new_field: DT = field(
         default_factory=lambda: cls_(**known_kwargs)  # type: ignore
     )
     return new_field

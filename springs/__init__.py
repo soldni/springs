@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 from omegaconf import II, MISSING, SI
 
@@ -30,6 +30,10 @@ def toggle_warnings(value: Optional[bool] = None):
     SpringsWarnings.toggle(value)
 
 
+def make_target(c: Callable) -> str:
+    return Target.to_string(c)
+
+
 __all__ = [
     "all_resolvers",
     "cast",
@@ -49,6 +53,7 @@ __all__ = [
     "II",
     "init",
     "make_flexy",
+    "make_target",
     "merge",
     "MISSING",
     "register",

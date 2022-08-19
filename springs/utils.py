@@ -130,7 +130,7 @@ class SpringsWarnings:
                         annotated as the return value. Further, it performs
                         type checking on the initialized object."""
                 ),
-                category=RuntimeWarning,
+                category=UserWarning,
             )
 
     @classmethod
@@ -143,7 +143,21 @@ class SpringsWarnings:
                    `@springs.dataclass` first, and then decorating
                    `@springs.make_flexy` on the resulting class."""
             ),
-            category=RuntimeWarning,
+            category=UserWarning,
+        )
+
+    @classmethod
+    def flexyfield(cls: Type["SpringsWarnings"]):
+        cls._warn(
+            clean_multiline(
+                """`flexy_field` is provided as a convenience for passing
+                values that are not explicitly annotated for a flexyclass;
+                however, it is not recommended because it not very pythonic.
+                Instead, creating an flexyclass that inherits from the current
+                one with the desired field and default value. Non explicit
+                values are expected to be provided at runtime. """
+            ),
+            category=UserWarning,
         )
 
     @classmethod

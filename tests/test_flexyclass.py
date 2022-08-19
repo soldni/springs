@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import springs as sp
 from springs.flexyclasses import flexy_field
@@ -10,10 +11,13 @@ class FlexyConfig:
     a: int = sp.MISSING
 
 
-@sp.dataclass
-class FlexyConfigContainer:
-    f1: FlexyConfig = FlexyConfig(a=1)
-    f2: FlexyConfig = flexy_field(FlexyConfig, a=1, b=2)
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+
+    @sp.dataclass
+    class FlexyConfigContainer:
+        f1: FlexyConfig = FlexyConfig(a=1)
+        f2: FlexyConfig = flexy_field(FlexyConfig, a=1, b=2)
 
 
 @sp.make_flexy

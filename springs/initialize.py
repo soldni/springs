@@ -14,8 +14,8 @@ from typing import (
     overload,
 )
 
-from omegaconf import DictConfig
 from get_annotations import get_annotations
+from omegaconf import DictConfig
 
 from .core import cast
 from .utils import SpringsWarnings, clean_multiline
