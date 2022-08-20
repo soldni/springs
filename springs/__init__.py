@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Optional, Type, TypeVar
 
 from omegaconf import II, MISSING, SI
 
@@ -20,18 +20,28 @@ from .core import (
 from .flexyclasses import flexy_field, flexyclass, make_flexy
 from .initialize import Target, init
 from .logging import configure_logging
+from .nicknames import NicknameRegistry
 from .resolvers import all_resolvers, register
 from .traversal import traverse
 from .types import get_type
 from .utils import SpringsWarnings
 
+T = TypeVar("T")
+
 
 def toggle_warnings(value: Optional[bool] = None):
+    """Shortcut for springs.utils.SpringsWarnings.toggle"""
     SpringsWarnings.toggle(value)
 
 
 def make_target(c: Callable) -> str:
+    """Shortcut for springs.initialize.Target.to_string"""
     return Target.to_string(c)
+
+
+def nickname(name: str) -> Callable[[Type[T]], Type[T]]:
+    """Shortcut for springs.nicknames.NicknameRegistry.add"""
+    return NicknameRegistry.add(name)
 
 
 __all__ = [
@@ -56,6 +66,7 @@ __all__ = [
     "make_target",
     "merge",
     "MISSING",
+    "nickname",
     "register",
     "SI",
     "Target",
