@@ -27,7 +27,7 @@ class TestNicknames(unittest.TestCase):
                 },
                 "dev": "${sp.from_node: dev_config}",
                 "test": (
-                    '${sp.from_node: ${train}'
+                    "${sp.from_node: ${train}"
                     ', "name=test", "data.path=/test"}'
                 ),
             }

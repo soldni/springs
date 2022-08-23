@@ -1,13 +1,22 @@
 import os
 import sys
-from argparse import ArgumentParser
-from dataclasses import is_dataclass
-from enum import Enum
+from argparse import Action, ArgumentParser
+from dataclasses import dataclass, fields, is_dataclass
 from inspect import getfile, getfullargspec, isclass
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Optional,
+    Sequence,
+    Type,
+    TypeVar,
+    Union,
+)
 
-from omegaconf import DictConfig
+from omegaconf import MISSING, DictConfig
 from typing_extensions import Concatenate, ParamSpec
 
 from .core import (
@@ -19,7 +28,7 @@ from .core import (
     traverse,
     validate,
 )
-from .utils import PrintUtils, clean_multiline
+from .utils import PrintUtils
 
 # parameters for the main function
 MP = ParamSpec("MP")
@@ -31,19 +40,126 @@ CT = TypeVar("CT")
 RT = TypeVar("RT")
 
 
-class CliFlags(Enum):
-    CONFIG = "config"
-    PARSED = "parsed"
-    QUIET = "quiet"
-    INPUTS = "inputs"
-    OPTIONS = "options"
-    DEBUG = "debug"
+@dataclass
+class Flag:
+    name: str
+    help: str
+    action: str = MISSING
+    default: Optional[Any] = MISSING
+    nargs: Optional[Union[str, int]] = MISSING
+    metavar: Optional[str] = MISSING
+    usage_extras: Optional[str] = MISSING
+
+    @property
+    def short(self) -> str:
+        return f"-{self.name[0]}"
+
+    @property
+    def usage(self) -> str:
+        extras = (
+            "" if self.usage_extras is MISSING else f" {self.usage_extras}"
+        )
+        return f"{{{self}{extras}}}"
+
+    @property
+    def long(self) -> str:
+        return f"--{self.name}"
+
+    def add_argparse(self, parser: ArgumentParser) -> Action:
+        kwargs: Dict[str, Any] = {"help": self.help}
+        if self.action is not MISSING:
+            kwargs["action"] = self.action
+        if self.default is not MISSING:
+            kwargs["default"] = self.default
+        if self.nargs is not MISSING:
+            kwargs["nargs"] = self.nargs
+        if self.metavar is not MISSING:
+            kwargs["metavar"] = self.metavar
+
+        return parser.add_argument(self.short, self.long, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.short}/{self.long}"
 
 
-def make_flags(opt_name: CliFlags) -> Sequence[str]:
-    """Simple helper to create a list of flags for an
-    option based on its name"""
-    return f"-{opt_name.value[0]}", f"--{opt_name.value}"
+@dataclass
+class CliFlags:
+    config: Flag = Flag(
+        name="config",
+        help="A path to a YAML file containing a configuration.",
+        default=[],
+        nargs="*",
+        metavar="/path/to/yaml",
+    )
+    options: Flag = Flag(
+        name="options",
+        help="Print all default options and CLI flags.",
+        action="store_true",
+    )
+    inputs: Flag = Flag(
+        name="inputs",
+        help="Print the input configuration.",
+        action="store_true",
+    )
+    parsed: Flag = Flag(
+        name="parsed",
+        help="Print the parsed configuration.",
+        action="store_true",
+    )
+    debug: Flag = Flag(
+        name="debug",
+        help="Enter debug mode by setting global logging to DEBUG.",
+        action="store_true",
+    )
+    quiet: Flag = Flag(
+        name="quiet",
+        help="If provided, it does not print the configuration when running.",
+        action="store_true",
+    )
+    resolvers: Flag = Flag(
+        name="resolvers",
+        help=(
+            "Print all registered resolvers in OmegaConf, "
+            "Springs, and current codebase."
+        ),
+        action="store_true",
+    )
+
+    @property
+    def flags(self) -> Iterable[Flag]:
+        for f in fields(self):
+            maybe_flag = getattr(self, f.name)
+            if isinstance(maybe_flag, Flag):
+                yield maybe_flag
+
+    def add_argparse(self, parser: ArgumentParser) -> Sequence[Action]:
+        return [flag.add_argparse(parser) for flag in self.flags]
+
+    @property
+    def usage(self) -> str:
+        """Print the usage string for the CLI flags."""
+        return " ".join(flag.usage for flag in self.flags)
+
+    def make_cli(self, func: Callable, name: str) -> ArgumentParser:
+        """Sets up argument parser ahead of running the CLI. This includes
+        creating a help message, and adding a series of flags."""
+
+        # we find the path to the script we are decorating with the
+        # cli so that we can display that to the user.
+        current_dir = Path(os.getcwd())
+        path_to_fn_file = Path(getfile(func))
+        rel_fn_file_path = str(path_to_fn_file).replace(str(current_dir), "")
+
+        # Program name and usage added here.
+        ap = ArgumentParser(
+            description=f"Parser for configuration {name}",
+            usage=(
+                f"python3 {rel_fn_file_path} {self.usage} "
+                "param1=value1 … paramN=valueN"
+            ),
+        )
+        self.add_argparse(ap)
+        return ap
 
 
 def check_if_callable_can_be_decorated(func: Callable):
@@ -76,65 +192,6 @@ def check_if_valid_main_args(func: Callable, args: Sequence[Any]):
         raise RuntimeError(msg)
 
 
-def make_cli_argument_parser(func: Callable, name: str) -> ArgumentParser:
-    """Sets up argument parser ahead of running the CLI. This includes
-    creating a help message, and adding a series of flags."""
-
-    # we find the path to the script we are decorating with the
-    # cli so that we can display that to the user.
-    current_dir = Path(os.getcwd())
-    path_to_fn_file = Path(getfile(func))
-    rel_fn_file_path = str(path_to_fn_file).replace(str(current_dir), "")
-
-    # Program name and usage printed here.
-    prog = f"Parser for configuration {name}"
-    usage = clean_multiline(
-        f"""
-        python3 {rel_fn_file_path} '
-        {{{"/".join(make_flags(CliFlags.CONFIG))} config_file.yaml}}
-        {{{"/".join(make_flags(CliFlags.OPTIONS))}}}
-        {{{"/".join(make_flags(CliFlags.INPUTS))}}}
-        {{{"/".join(make_flags(CliFlags.DEBUG))}}}
-        {{{"/".join(make_flags(CliFlags.PARSED))}}}
-        {{{"/".join(make_flags(CliFlags.QUIET))}}}
-        param1=value1, …, paramN=valueN'
-    """
-    )
-    ap = ArgumentParser(prog=prog, usage=usage)
-
-    # add options
-    msg = "A path to a YAML file containing a configuration."
-    ap.add_argument(
-        *make_flags(CliFlags.CONFIG),
-        default=[],
-        help=msg,
-        nargs="*",
-        metavar="/path/to/config.yaml",
-    )
-
-    msg = "Print all default options and CLI flags."
-    ap.add_argument(
-        *make_flags(CliFlags.OPTIONS), action="store_true", help=msg
-    )
-
-    msg = "Print the input configuration."
-    ap.add_argument(
-        *make_flags(CliFlags.INPUTS), action="store_true", help=msg
-    )
-
-    msg = "Print the parsed configuration."
-    ap.add_argument(
-        *make_flags(CliFlags.PARSED), action="store_true", help=msg
-    )
-
-    msg = "Enter debug mode by setting global logging to DEBUG."
-    ap.add_argument(*make_flags(CliFlags.DEBUG), action="store_true", help=msg)
-
-    msg = "If provided, it does not print the configuration when running."
-    ap.add_argument(*make_flags(CliFlags.QUIET), action="store_true", help=msg)
-    return ap
-
-
 def wrap_main_method(
     func: Callable[Concatenate[Any, MP], RT],
     name: str,
@@ -152,11 +209,8 @@ def wrap_main_method(
     check_if_valid_main_args(func=func, args=args)
 
     # Get argument parser and arguments
-    ap = make_cli_argument_parser(func=func, name=name)
+    ap = CliFlags().make_cli(func=func, name=name)
     opts, leftover_args = ap.parse_known_args()
-
-    # set some default options for when no options are provided
-    # printing_steps = PrintingSteps(opts)
 
     # setup debug
     if opts.debug:
@@ -170,7 +224,13 @@ def wrap_main_method(
 
     # We don't run the main program if the user
     # has requested to print the any of the config.
-    do_no_run = opts.options or opts.inputs or opts.parsed
+    do_no_run = opts.options or opts.inputs or opts.parsed or opts.resolvers
+
+    if opts.resolvers:
+        # relative import here not to mess things up
+        from .resolvers import all_resolvers
+
+        pu.print("RESOLVERS:", *all_resolvers(), level_up=1)
 
     # Print default options if requested py the user
     if opts.options:
