@@ -124,6 +124,11 @@ class CliFlags:
         ),
         action="store_true",
     )
+    nicknames: Flag = Flag(
+        name="nicknames",
+        help="Print all registered nicknames in Springs",
+        action="store_true",
+    )
 
     @property
     def flags(self) -> Iterable[Flag]:
@@ -224,13 +229,28 @@ def wrap_main_method(
 
     # We don't run the main program if the user
     # has requested to print the any of the config.
-    do_no_run = opts.options or opts.inputs or opts.parsed or opts.resolvers
+    do_no_run = (
+        opts.options
+        or opts.inputs
+        or opts.parsed
+        or opts.resolvers
+        or opts.nicknames
+    )
 
     if opts.resolvers:
         # relative import here not to mess things up
         from .resolvers import all_resolvers
 
         pu.print("RESOLVERS:", *all_resolvers(), level_up=1)
+
+    if opts.nicknames:
+        from .nicknames import NicknameRegistry
+
+        pu.print(
+            "NICKNAMES:",
+            *(": ".join(e) for e in NicknameRegistry.all()),
+            level_up=1,
+        )
 
     # Print default options if requested py the user
     if opts.options:

@@ -1,3 +1,4 @@
+import importlib.metadata
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Type, TypeVar
 
@@ -27,6 +28,15 @@ from .types import get_type
 from .utils import SpringsWarnings
 
 T = TypeVar("T")
+
+
+try:
+    # package has been installed, so it has a version number
+    # from pyproject.toml
+    __version__ = importlib.metadata.version(__package__ or __name__)
+except importlib.metadata.PackageNotFoundError:
+    # package hasn't been installed, so set version to "dev"
+    __version__ = "dev"
 
 
 def toggle_warnings(value: Optional[bool] = None):

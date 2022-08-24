@@ -1,5 +1,15 @@
 from dataclasses import is_dataclass
-from typing import Callable, Dict, Literal, Type, TypeVar, Union, overload
+from typing import (
+    Callable,
+    Dict,
+    Literal,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 
 T = TypeVar("T")
 
@@ -12,7 +22,6 @@ class NicknameRegistry:
         """Save a configuration with a nickname for easy reuse."""
 
         def add_to_registry(fn: Type[T]) -> Type[T]:
-
             if not is_dataclass(fn):
                 raise ValueError(f"{fn} must be a dataclass")
 
@@ -42,3 +51,10 @@ class NicknameRegistry:
         if raise_if_missing and name not in cls.__registry__:
             raise ValueError(f"{name} is not registered as a nickname")
         return cls.__registry__.get(name, None)
+
+    @classmethod
+    def all(cls) -> Sequence[Tuple[str, str]]:
+        return [
+            (name, str(config.__name__))
+            for name, config in cls.__registry__.items()
+        ]
