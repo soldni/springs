@@ -3,6 +3,8 @@ import importlib
 import importlib.util
 import inspect
 import itertools
+from dataclasses import is_dataclass
+from types import ModuleType
 from typing import (
     Any,
     Callable,
@@ -15,7 +17,7 @@ from typing import (
 )
 
 from get_annotations import get_annotations
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from .core import cast
 from .utils import SpringsWarnings, clean_multiline
@@ -131,6 +133,19 @@ class Target:
         except ModuleNotFoundError:
             return False
 
+    @staticmethod
+    def get_config_module(config: Any) -> Union[ModuleType, None]:
+        """Returns the package of the type of config if the configuration
+        is a structured config (that is, derived from a dataclass/attr.s,
+        None otherwise"""
+        if isinstance(config, DictConfig):
+            config_type = OmegaConf.get_type(config)
+
+            if is_dataclass(config_type):
+                return inspect.getmodule(config_type)
+
+        return None
+
     @classmethod
     def to_string(cls: Type["Target"], callable: Any) -> str:
         if inspect.isclass(callable):
@@ -143,8 +158,27 @@ class Target:
             raise TypeError(f"`{callable}` is not a callable")
 
     @classmethod
-    def from_string(cls: Type["Target"], path: str) -> Any:
+    def from_string(
+        cls: Type["Target"], path: str, module: Optional[ModuleType] = None
+    ) -> Any:
+        """Returns a callable from a string path. If path is relative, then
+        the module is used to resolve the path.
+
+        Args:
+            path (str): dot-separated path to the callable, e.g.
+                "module.function"
+            module (Optional[ModuleType]): module to use to resolve the path
+                if the path is relative. If None, it is assumed that the
+                path is absolute.
+        """
+
         callable_ = None
+
+        if path.startswith("."):
+            if isinstance(module, ModuleType):
+                path = f"{module.__package__}{path}"
+            else:
+                raise ImportError(f"Cannot resolve relative path {path}")
 
         if path.startswith("__main__."):
             # special case for any method that might have been defined in
@@ -169,7 +203,6 @@ class Target:
 
             # if we exhausted the method name, then we found the method
             callable_ = method_container if len(method_name) == 0 else None
-
         elif cls._is_module(path):
             return importlib.import_module(path)
         elif "." in path:
@@ -243,7 +276,8 @@ class init(Generic[InitT, CallableT]):
                     f"Config `{_config_}` has no `{cls.TARGET}` key!"
                 )
 
-        return Target.from_string(target)
+        config_module = Target.get_config_module(_config_)
+        return Target.from_string(target, config_module)
 
     @overload
     @classmethod
