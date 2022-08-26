@@ -12,6 +12,8 @@ from .nicknames import NicknameRegistry
 
 T = TypeVar("T")
 
+__all__ = ["fullpath", "timestamp", "from_node"]
+
 
 def register(
     name: str, use_cache: bool = False
@@ -32,14 +34,14 @@ def all_resolvers() -> Sequence[str]:
 
 
 @register("sp.fullpath")
-def get_full_path(path: str) -> str:
+def fullpath(path: str) -> str:
     """Resolve all implicit and relative path components
     to give an absolute path to a file or directory"""
     return str(Path(path).resolve().absolute())
 
 
 @register("sp.timestamp")
-def get_timestamp(fmt: Optional[str] = None) -> str:
+def timestamp(fmt: Optional[str] = None) -> str:
     """Returns a timestamp in the format provided; if not provided, use
     year-month-day_hour-minute-second."""
 
