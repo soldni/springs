@@ -90,7 +90,7 @@ python main.py \
     model.name=bert-base-uncased
 ```
 
-...or from one or more YAML config files (if multiple, the latter ones override the former ones).
+...or from one or more YAML config files (if multiple, *e.g.,* `-c /path/to/cfg1.yaml -c /path/to/cfg2.yaml` the latter ones override the former ones).
 
 
 ```YAML
