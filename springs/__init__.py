@@ -2,7 +2,7 @@ import importlib.metadata
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Type, TypeVar
 
-from omegaconf import II, MISSING, SI
+from omegaconf import II, MISSING, SI, DictConfig, ListConfig
 
 from .commandline import cli
 from .core import (
@@ -60,9 +60,10 @@ __all__ = [
     "cli",
     "configure_logging",
     "dataclass",
+    "DictConfig",
     "field",
-    "flexyclass",
     "flexy_field",
+    "flexyclass",
     "from_dataclass",
     "from_dict",
     "from_file",
@@ -72,6 +73,7 @@ __all__ = [
     "get_type",
     "II",
     "init",
+    "ListConfig",
     "make_flexy",
     "make_target",
     "merge",
@@ -80,9 +82,9 @@ __all__ = [
     "register",
     "SI",
     "Target",
-    "toggle_warnings",
     "to_dict",
     "to_yaml",
+    "toggle_warnings",
     "traverse",
     "validate",
 ]
