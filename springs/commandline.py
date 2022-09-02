@@ -88,7 +88,7 @@ class CliFlags:
         name="config",
         help="A path to a YAML file containing a configuration.",
         default=[],
-        action='append',
+        action="append",
         metavar="/path/to/yaml",
     )
     options: Flag = Flag(

@@ -2,13 +2,13 @@ from collections import abc
 from copy import deepcopy
 from dataclasses import is_dataclass
 from pathlib import Path
-from typing import Any, Dict, Sequence, Union
+from typing import Any, Dict, List, Sequence, Tuple, Union
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
 
 from .flexyclasses import unlock_all_flexyclasses
-from .traversal import traverse
+from .traversal import ParamSpec, traverse
 from .types import get_type, safe_select
 
 
@@ -133,8 +133,13 @@ def to_dict(config: Any) -> Dict[DictKeyType, Any]:
 ########################################
 
 
-def validate(config_node: Any) -> DictConfig:
-    """Check if all attributes are resolve and not missing"""
+def safe_validate(config_node: Any) -> Tuple[DictConfig, List[ParamSpec]]:
+    """Check if all attributes are resolve and not missing
+
+    If resolution fails, second element of return tuple contains
+    missing keys."""
+
+    missing = []
 
     if not isinstance(config_node, DictConfig):
         raise TypeError(f"`{config_node}` is not a DictConfig!")
@@ -152,12 +157,21 @@ def validate(config_node: Any) -> DictConfig:
             try:
                 getattr(spec.parent, str(spec.key))
             except Exception:
-                raise ValueError(
-                    f"Interpolation for `{spec.path}` " "not resolved"
-                )
+                missing.append(spec)
 
-    config_node = deepcopy(config_node)
-    OmegaConf.resolve(config_node)
+    if len(missing) == 0:
+        # all resolution successful!
+        config_node = deepcopy(config_node)
+        OmegaConf.resolve(config_node)
+
+    return config_node, missing
+
+
+def validate(config_node: Any) -> DictConfig:
+    config_node, missing = safe_validate(config_node)
+    for spec in missing:
+        # this will not run if missing is an empty list
+        raise ValueError(f"Interpolation for `{spec.path}` not resolved")
     return config_node
 
 
