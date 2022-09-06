@@ -16,6 +16,11 @@ class ParamSpec:
         return isinstance(self.value, (DictConfig, ListConfig))
 
 
+@dataclass
+class FailedParamSpec(ParamSpec):
+    error: Exception
+
+
 def traverse(
     node: BaseContainer,
     include_nodes: bool = False,

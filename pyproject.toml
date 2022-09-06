@@ -1,6 +1,6 @@
 [project]
 name = "springs"
-version = "1.3.4"
+version = "1.3.5"
 description = "A set of utilities to create and manage configuration files effectively, built on top of OmegaConf."
 authors = [
     {name = "Luca Soldaini", email = "luca@soldaini.net" }

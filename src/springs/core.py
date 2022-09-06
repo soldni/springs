@@ -1,6 +1,6 @@
 from collections import abc
 from copy import deepcopy
-from dataclasses import is_dataclass
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple, Union
 
@@ -8,7 +8,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
 
 from .flexyclasses import unlock_all_flexyclasses
-from .traversal import ParamSpec, traverse
+from .traversal import FailedParamSpec, traverse
 from .types import get_type, safe_select
 
 
@@ -133,7 +133,9 @@ def to_dict(config: Any) -> Dict[DictKeyType, Any]:
 ########################################
 
 
-def safe_validate(config_node: Any) -> Tuple[DictConfig, List[ParamSpec]]:
+def safe_validate(
+    config_node: Any
+) -> Tuple[DictConfig, List[FailedParamSpec]]:
     """Check if all attributes are resolve and not missing
 
     If resolution fails, second element of return tuple contains
@@ -156,8 +158,8 @@ def safe_validate(config_node: Any) -> Tuple[DictConfig, List[ParamSpec]]:
         if OmegaConf.is_interpolation(spec.parent, spec.key):
             try:
                 getattr(spec.parent, str(spec.key))
-            except Exception:
-                missing.append(spec)
+            except Exception as e:
+                missing.append(FailedParamSpec(error=e, **asdict(spec)))
 
     if len(missing) == 0:
         # all resolution successful!
@@ -171,7 +173,10 @@ def validate(config_node: Any) -> DictConfig:
     config_node, missing = safe_validate(config_node)
     for spec in missing:
         # this will not run if missing is an empty list
-        raise ValueError(f"Interpolation for `{spec.path}` not resolved")
+        raise ValueError(
+            f"Interpolation for `{spec.path}` not resolved; "
+            f"{type(spec.error)}: {' '.join(str(a) for a in spec.error.args)}"
+        ) from spec.error
     return config_node
 
 
