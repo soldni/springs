@@ -174,8 +174,9 @@ def validate(config_node: Any) -> DictConfig:
     for spec in missing:
         # this will not run if missing is an empty list
         raise ValueError(
-            f"Interpolation for `{spec.path}` not resolved; "
-            f"{type(spec.error)}: {' '.join(str(a) for a in spec.error.args)}"
+            f"Interpolation for '{spec.path}' not resolved; "
+            f"{type(spec.error).__name__}: "
+            f"{' '.join(str(a) for a in spec.error.args)}"
         ) from spec.error
     return config_node
 
