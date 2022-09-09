@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional, Sequence, TypeVar, Union
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.basecontainer import BaseContainer
 from yaml.error import MarkedYAMLError
 
@@ -85,7 +85,7 @@ def from_node(
 
     if isinstance(node_or_nickname, str):
         node = from_dataclass(NicknameRegistry.get(node_or_nickname))
-    elif isinstance(node_or_nickname, DictConfig):
+    elif isinstance(node_or_nickname, (DictConfig, ListConfig)):
         node = node_or_nickname
     else:
         raise TypeError(

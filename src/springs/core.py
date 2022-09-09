@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import cast as typecast
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.omegaconf import DictKeyType
@@ -54,6 +55,25 @@ def from_dataclass(config: Any) -> DictConfig:
     return parsed_config
 
 
+# TODO[soldni]: figure out why a type error is being raised
+@unlock_all_flexyclasses  # type: ignore
+def from_python(
+    config: Union[Dict[DictKeyType, Any], Dict[str, Any], List[Any]]
+) -> Union[DictConfig, ListConfig]:
+    """Create a config from a dict"""
+    if not isinstance(config, (dict, list)):
+        raise TypeError(f"`{config}` is not a dict or list!")
+
+    parsed_config = OmegaConf.create(config)
+
+    if not isinstance(parsed_config, (DictConfig, ListConfig)):
+        raise ValueError(
+            f"Config `{config}` is not a DictConfig or ListConfig!"
+        )
+
+    return parsed_config
+
+
 @unlock_all_flexyclasses
 def from_dict(
     config: Union[Dict[DictKeyType, Any], Dict[str, Any]]
@@ -62,11 +82,7 @@ def from_dict(
     if not isinstance(config, dict):
         raise TypeError(f"`{config}` is not a dict!")
 
-    parsed_config = OmegaConf.create(config)
-
-    if not isinstance(parsed_config, DictConfig):
-        raise ValueError(f"Config `{config}` is not a DictConfig!")
-    return OmegaConf.create(config)
+    return from_python(config)
 
 
 @unlock_all_flexyclasses
@@ -118,11 +134,17 @@ def to_yaml(config: Any) -> str:
     return OmegaConf.to_yaml(config)
 
 
-def to_dict(config: Any) -> Dict[DictKeyType, Any]:
+def to_python(config: Any) -> Any:
     """Convert a omegaconf config to a Python primitive type"""
     if is_dataclass(config):
         config = from_dataclass(config)
     container = OmegaConf.to_container(config)
+    return container
+
+
+def to_dict(config: Any) -> Dict[DictKeyType, Any]:
+    """Convert a omegaconf config to a Python primitive type"""
+    container = to_python(config)
 
     if not isinstance(container, dict):
         raise TypeError(f"`{container}` is not a dict!")
@@ -134,7 +156,7 @@ def to_dict(config: Any) -> Dict[DictKeyType, Any]:
 
 
 def safe_validate(
-    config_node: Any
+    config_node: Any,
 ) -> Tuple[DictConfig, List[FailedParamSpec]]:
     """Check if all attributes are resolve and not missing
 
@@ -266,7 +288,56 @@ def _pre_merge_override_interpolations(
             )
 
 
-def merge(*configs: Any) -> DictConfig:
+def concatenate_list(*configs: Any) -> ListConfig:
+    """Concatenate a list of configs into a single list config"""
+    config = OmegaConf.create([])
+    for cfg in configs:
+        if not isinstance(cfg, ListConfig):
+            raise TypeError(f"`{cfg}` is not a ListConfig!")
+        config += cfg
+    return config
+
+
+def modify_list(modified: ListConfig, *modifiers: DictConfig) -> ListConfig:
+    """Modify a list config by replacing the elements specified in
+    `modified` with the values in `modified`."""
+    if len(modifiers) == 0:
+        return modified
+
+    modified = deepcopy(modified)
+
+    for modifier in modifiers:
+        for key, mod_val in modifier.items():
+            try:
+                pos = int(typecast(Any, key))
+            except ValueError:
+                raise ValueError(f"Invalid position `{key}` for ListConfig")
+
+            if pos >= len(modified):
+                raise ValueError(
+                    f"Invalid position `{key}` for ListConfig "
+                    f" of length {len(modified)}"
+                )
+
+            if isinstance(modified[pos], ListConfig):
+                if isinstance(mod_val, ListConfig):
+                    modified[pos] = concatenate_list(modified[pos], mod_val)
+                elif isinstance(mod_val, DictConfig):
+                    modified[pos] = modify_list(modified[pos], mod_val)
+                else:
+                    modified[pos] = mod_val
+            elif isinstance(modified[pos], DictConfig):
+                if isinstance(mod_val, DictConfig):
+                    modified[pos] = merge_dict(modified[pos], mod_val)
+                else:
+                    modified[pos] = mod_val
+            else:
+                modified[pos] = mod_val
+
+    return modified
+
+
+def merge_dict(*configs: Any) -> DictConfig:
     """Merges multiple configurations into one."""
 
     if not configs:
@@ -301,3 +372,36 @@ def merge(*configs: Any) -> DictConfig:
             )
 
     return cast(merged_config)
+
+
+def merge(*configs: Any) -> Any:
+    """Merges multiple configurations into one. Depending on the type of the
+    configs, the merge will be done differently:
+        - If all configs are DictConfig, the merge will be done by calling
+          `merge_dict`, which creates a new DictConfig.
+        - If all configs are ListConfig, the merge will be done by calling
+          `concatenate_list`, which concatenates the configs into a new
+          ListConfig.
+        - If the first config is a ListConfig and the rest are DictConfig, the
+          merge will be done by calling `modify_list`, which modifies the
+          list config by replacing the elements specified in the DictConfig.
+          In this case, dict configs are expected to have integer keys to
+          indicate the position of the element to be modified.
+        - If no configs are provided, an empty DictConfig is returned.
+        - In all other cases, a TypeError is raised.
+    """
+
+    if len(configs) == 0:
+        return from_none()
+    if all(isinstance(c, DictConfig) for c in configs):
+        return merge_dict(*configs)
+    elif all(isinstance(c, ListConfig) for c in configs):
+        return concatenate_list(*configs)
+    elif len(configs) > 1:
+        head, *rest = configs
+        if isinstance(head, ListConfig) and all(
+            isinstance(c, DictConfig) for c in rest
+        ):
+            return modify_list(head, *rest)
+    else:
+        raise TypeError(f"Cannot merge {configs}")
