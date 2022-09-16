@@ -1,6 +1,6 @@
 # Springs
 
-![springs_logo](https://github.com/soldni/springs/raw/main/assets/img/logo.png){:#hero}
+<img style="  margin-left: auto; margin-right:auto; margin-bottom: 2em; display: block" id="hero" src="https://github.com/soldni/springs/raw/main/assets/img/logo.png" alt="Logo for Springs" width="200px" height="auto">
 
 A set of utilities to turn [OmegaConf][1] into a fully fledge configuration utils.
 Just like the springs inside an Omega watch, the Springs library helps you move on with your experiments.
