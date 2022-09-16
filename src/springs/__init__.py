@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from omegaconf import MISSING, DictConfig, ListConfig
 
@@ -60,6 +60,32 @@ def make_flexy(cls_: Any) -> Any:
     return flexyclass(cls_)
 
 
+def fdict(**kwargs: Any) -> Dict[str, Any]:
+    """Shortcut for creating a Field with a default_factory that returns
+    a dictionary.
+
+    Args:
+        **kwargs: values for the dictionary returned by default factory"""
+
+    def _factory_fn() -> Dict[str, Any]:
+        return {**kwargs}
+
+    return field(default_factory=_factory_fn)
+
+
+def flist(*args: Any) -> List[Any]:
+    """Shortcut for creating a Field with a default_factory that returns
+    a list.
+
+    Args:
+        *args: values for the list returned by default factory"""
+
+    def _factory_fn() -> List[Any]:
+        return [*args]
+
+    return field(default_factory=_factory_fn)
+
+
 __all__ = [
     "all_resolvers",
     "cast",
@@ -68,8 +94,10 @@ __all__ = [
     "dataclass",
     "DictConfig",
     "edit_list",
+    "fdict",
     "field",
     "flexyclass",
+    "flist",
     "from_dataclass",
     "from_dict",
     "from_file",
