@@ -1,0 +1,155 @@
+backbone: microsoft/deberta-base
+
+env:
+  run_name: Deberta-base-csabstruct-naaclv2
+  root_dir: ${sp.fullpath:${oc.env:HOME}/plruns}
+  s3_prefix: s3://ai2-s2-lucas/plruns/sse
+
+data:
+  batch_size: 24
+  num_workers: 4
+  collator:
+    _target_: smashed.mappers.FromTokenizerTensorCollatorMapper
+    tokenizer: ${model.tokenizer}
+    fields_pad_ids:
+      labels: -100
+  train_splits_config:
+    - loader:
+        _target_: sse.data.datasets.csabstruct.CSAbstruct
+        path: cleaned
+        split: train
+      mappers:
+        # replace text values for labels with integer labels
+        - _target_: smashed.mappers.LookupMapper
+          field_name: labels
+          lookup_table:
+            background: 0
+            method: 1
+            objective: 2
+            other: 3
+            result: 4
+            abstain: -100
+        # tokenize input sequence
+        - _target_: smashed.mappers.TokenizerMapper
+          tokenizer: ${model.tokenizer}
+          input_field: sentences
+          add_special_tokens: False
+          truncation: True
+          max_length: 128
+        # Remove fields that are not input_ids, attention_mask, or labels
+        - _target_: smashed.mappers.ChangeFieldsMapper
+          keep_fields:
+            - input_ids
+            - attention_mask
+            - labels
+        # make strides
+        - _target_: smashed.mappers.MultiSequenceStriderMapper
+          max_stride_count: 10
+          max_length: 512
+          tokenizer: ${model.tokenizer}
+          length_reference_field: input_ids
+        # remove strides that have no training data (because all labels say ignore)
+        - _target_: smashed.mappers.FilterMapper
+          field_name: labels
+          operator: ">="
+          value: 0
+        # adding padding for all sequences (x 2)
+        - _target_: smashed.mappers.TokensSequencesPaddingMapper
+          tokenizer: ${model.tokenizer}
+          input_field: input_ids
+        - _target_: smashed.mappers.AttentionMaskSequencePaddingMapper
+          tokenizer: ${model.tokenizer}
+        # mask labels so that only one is use
+        - _target_: smashed.mappers.LabelsMaskerMapper
+          labels_field: labels
+          strategy: one
+        # turning labels into sequences of labels since this is a token
+        # classification problem
+        - _target_: smashed.mappers.SingleValueToSequenceMapper
+          single_value_field: labels
+          strategy: last
+        - _target_: smashed.mappers.SequencesConcatenateMapper
+        - _target_: smashed.mappers.Python2TorchMapper
+    - loader:
+        _target_: sse.data.datasets.raymond_naacl.RaymondNaacl
+        path: v2
+        split: train
+      # mappers: "${data.train_splits_config[0].mappers}"
+      mappers: "${
+        sp.from_node:
+        ${data.train_splits_config[0].mappers},
+        '[7].strategy=all'
+        }"
+
+  valid_splits_config:
+    - "${
+      sp.from_node:
+      ${data.train_splits_config[0]},
+      'loader.split=test'
+      }"
+  # test_splits_config:
+  #   - "${
+  #     sp.from_node:
+  #     ${data.train_splits_config[0]},
+  #     'loader.split=test'
+  #     }"
+
+trainer:
+  max_epochs: 5
+  val_check_interval: .2
+  gradient_clip_val: 1.0
+  log_every_n_steps: 10
+
+
+checkpointing:
+  save_last: True
+  save_top_k: 3
+
+
+model:
+  _target_: sse.models.tokencls.SimpleTokenClassificationModule
+  tokenizer:
+    _target_: transformers.AutoTokenizer.from_pretrained
+    pretrained_model_name_or_path: ${backbone}
+  transformer:
+    _target_: transformers.AutoModelForTokenClassification.from_pretrained
+    pretrained_model_name_or_path: ${backbone}
+    num_labels: 5
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 5.e-5
+    weight_decay: 0.01
+    parameter_groups:
+      - - ["bias", "LayerNorm.bias", "LayerNorm.weight", "layer_norm.weight"]
+        - {"weight_decay": 0.0}
+  scheduler:
+    _target_: sse.models.schedulers.LinearScheduleWithWarmup
+    num_training_steps: -1  # infer automatically
+    num_warmup_steps: .1    # 10% of total steps
+  loss:
+    _target_: torch.nn.modules.loss.CrossEntropyLoss
+  metrics:
+    micro_f1:
+      _target_: torchmetrics.F1Score
+      average: micro
+      num_classes: ${model.transformer.num_labels}
+    macro_f1:
+      _target_: torchmetrics.F1Score
+      average: macro
+      num_classes: ${model.transformer.num_labels}
+    macro_precision:
+      _target_: torchmetrics.Precision
+      average: macro
+      num_classes: ${model.transformer.num_labels}
+    macro_recall:
+      _target_: torchmetrics.Recall
+      average: macro
+      num_classes: ${model.transformer.num_labels}
+    macro_accuracy:
+      _target_: torchmetrics.Accuracy
+      average: macro
+      num_classes: ${model.transformer.num_labels}
+    micro_accuracy:
+      _target_: torchmetrics.Accuracy
+      average: micro
+      num_classes: ${model.transformer.num_labels}

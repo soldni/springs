@@ -26,7 +26,7 @@ from .core import (
     from_options,
     merge,
     traverse,
-    validate,
+    unsafe_merge,
 )
 from .utils import PrintUtils
 
@@ -262,34 +262,43 @@ def wrap_main_method(
         )
         pu.print(*cli_opts_repr, level_up=1)
 
-    # load options from one or more config files;
-    # if multiple config files are provided,
-    # the latter ones can override the former ones.
-    file_config = from_none()
+    # This configuration is used to accumulate all options across
+    # various config files and the CLI.
+    accumulator_config = unsafe_merge(config_node)
+
+    # load options from one or more config files; if multiple config files
+    # are provided, the latter ones can override the former ones.
     for config_file in opts.config:
-        file_config = merge(file_config, from_file(config_file))
+        # load the file
+        file_config = from_file(config_file)
+
+        # print the configuration if requested by the user
+        if opts.inputs:
+            pu.print(f"INPUT/FILE {config_file}:", file_config)
+
+        # merge the file config with the main config
+        accumulator_config = unsafe_merge(accumulator_config, file_config)
 
     # load options from cli
     cli_config = from_options(leftover_args)
 
-    # merge file and cli config; cli config overrides file config
-    input_config = merge(file_config, cli_config)
-
-    # print both configs if requested
+    # print the configuration if requested by the user
     if opts.inputs:
         pu.print("INPUT/CLI ARGS:", cli_config)
-        pu.print("INPUT/CFG FILE:", file_config)
+
+    # merge the cli config with the main config, do it last
+    # so that cli takes precedence over config files.
+    accumulator_config = unsafe_merge(accumulator_config, cli_config)
 
     if do_no_run and not opts.parsed:
         # if the user hasn't requested to print the parsed config
         # and we are not running the main program, we can exit here.
         sys.exit(0)
 
-    # load configuration with node parsers
-    parsed_config = merge(config_node, input_config)
-
-    # check if all parameters are provided/resolved
-    parsed_config = validate(parsed_config)
+    # finally merge the accumulator config with the main config
+    # using the safe merging function, which will resolve interpolations
+    # and perform type checking.
+    parsed_config = merge(config_node, accumulator_config)
 
     # print it if requested
     if not (opts.quiet) or opts.parsed:
@@ -317,7 +326,39 @@ def cli(
     Callable[MP, RT],
 ]:
     """
-    TODO[lucas]: write doc
+    Create a command-line interface for a method that uses a config file.
+    The parsed configuration will be passed as the first argument to the
+    decorated method.
+
+    Example usage:
+
+    ```python
+
+    import springs as sp
+
+    @sp.dataclass
+    class Config:
+        greeting: str = "Hello"
+        name: str = "World"
+
+
+    @sp.cli(Config)
+    def main(cfg: Config):
+        print(f"{cfg.greeting}, {cfg.name}!")
+    ```
+
+    A structured configuration is not required, but it is recommended,
+    as it will allow for type checking at runtime and type hints during
+    development.
+
+    Args:
+        config_node_cls (Optional[type]): The class of the configuration
+            node. If not provided, no type checking will be performed.
+        print_fn (Optional[Callable]): A function to use for printing.
+            If not provided, `print` will be used.
+
+    Returns:
+        Callable: A decorator that can be used to decorate a method.
     """
 
     if config_node_cls is None:

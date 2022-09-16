@@ -3,18 +3,13 @@ import types
 import warnings
 from collections import abc
 from dataclasses import fields, is_dataclass
-from typing import (
-    Any,
-    NamedTuple,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-    get_args,
-    get_origin,
-)
+from typing import Any, NamedTuple, Optional, Tuple, Type, Union
+from typing import cast as typecast
+from typing import get_args, get_origin
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf.base import DictKeyType
+from omegaconf.errors import OmegaConfBaseException
 
 try:
     from omegaconf._utils import get_type_hint as _get_type_hint
@@ -81,7 +76,10 @@ class MappingType(NamedTuple):
     val: Any
 
 
-def resolve_mapping(type_: Any) -> Union[None, MappingType]:
+def resolve_mapping(type_: Optional[type]) -> Union[None, MappingType]:
+    if type_ is None:
+        return None
+
     origin = get_origin(type_)
 
     if origin is not None and issubclass(origin, abc.Mapping):
@@ -90,45 +88,97 @@ def resolve_mapping(type_: Any) -> Union[None, MappingType]:
     return None
 
 
-def resolve_sequence(type_: Any) -> Union[None, MappingType]:
+def resolve_tuple(type_: Optional[type]) -> Union[None, Tuple[Type, ...]]:
+    if type_ is None:
+        return None
+
     origin = get_origin(type_)
 
     if origin is not None and issubclass(origin, abc.Sequence):
-        return MappingType(*get_args(type_))
+        return get_args(type_)
 
     return None
 
 
-def safe_select(config: DictConfig, key: str, interpolate: bool = True) -> Any:
+def resolve_sequence(type_: Optional[type]) -> Union[None, type]:
+    types_as_tuple = resolve_tuple(type_)
+    if types_as_tuple is not None:
+        if len(types_as_tuple) > 1:
+            raise ValueError(
+                "Tuple with more than one element is not a "
+                "supported sequence type"
+            )
+        return types_as_tuple[0]
+    else:
+        return None
+
+
+def safe_select(
+    config: Union[DictConfig, ListConfig],
+    key: DictKeyType,
+    interpolate: bool = True,
+) -> Union[DictConfig, ListConfig, None]:
     """Selects a key from a config, but returns None if the key
     is missing or the key resolution fails."""
 
+    if not isinstance(config, (DictConfig, ListConfig)):
+        raise TypeError(
+            f"safe_select only works with DictConfig and ListConfig, "
+            f"but got {type(config)}"
+        )
+
+    # we need to check if the is present in the config; the check varies
+    # slightly depending on whether the config is a DictConfig or a ListConfig.
+    key_does_exist = (isinstance(config, DictConfig) and key in config) or (
+        isinstance(config, ListConfig)
+        and typecast(int, key) < len(typecast(ListConfig, config))
+    )
+
     if (
-        key in config
-        and OmegaConf.is_interpolation(config, key)
+        key_does_exist
+        and OmegaConf.is_interpolation(config, typecast(Union[int, str], key))
         and not interpolate
     ):
-        return OmegaConf.to_container(config).get(key, None)  # type: ignore
+        # by calling to_container, we force the key will
+        # not be interpolated
+        container = OmegaConf.to_container(config)
+        if isinstance(container, list):
+            return container[typecast(int, key)]
+        elif isinstance(container, dict):
+            return container[typecast(str, key)]
+        else:
+            return None
 
-    if (key not in config) or OmegaConf.is_missing(config, key):
+    if (not key_does_exist) or OmegaConf.is_missing(config, key):
+        # if the key is missing, we return None
         return None
-    elif OmegaConf.is_interpolation(config, key):
-        if interpolate:
+    elif OmegaConf.is_interpolation(config, typecast(Union[int, str], key)):
+        # interpolation is enabled if we reach this point
+        if isinstance(config, DictConfig):
             return OmegaConf.select(
-                cfg=config, key=key, throw_on_resolution_failure=False
+                cfg=config,
+                key=typecast(str, key),
+                throw_on_resolution_failure=False,
             )
+        elif isinstance(config, ListConfig):
+            try:
+                return config[typecast(int, key)]
+            except OmegaConfBaseException:
+                return None
         else:
             di: dict = OmegaConf.to_container(config)  # type: ignore
             return di.get(key, None)
+    elif isinstance(config, DictConfig):
+        return OmegaConf.select(cfg=config, key=typecast(str, key))
     else:
-        return OmegaConf.select(cfg=config, key=key)
+        return config[typecast(int, key)]
 
 
 def get_type(
     config_node: Union[DictConfig, ListConfig],
     key: Optional[Union[int, str]] = None,
 ) -> Union[type, None]:
-    """Tries to infer the type of a config node key. Reurns None if
+    """Tries to infer the type of a config node key. Returns None if
     the type cannot be inferred."""
 
     if not isinstance(config_node, (DictConfig, ListConfig)):
@@ -177,14 +227,10 @@ def get_type(
             # type of a non-existing element, so we rely on type hint
             # if available
             node_type_hint = get_type_hint(config_node)
-            resolved_node_type_hint = resolve_sequence(node_type_hint)
+            resolved_node_type_hint_seq = resolve_sequence(node_type_hint)
 
             # gets around the fact that we might not be able resolve
-            return (
-                resolved_node_type_hint.val
-                if resolved_node_type_hint is not None
-                else None
-            )
+            return resolved_node_type_hint_seq
     else:
         raise ValueError(
             "Expected a DictConfig or ListConfig object, "

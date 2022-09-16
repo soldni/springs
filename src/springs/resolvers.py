@@ -6,8 +6,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.basecontainer import BaseContainer
 from yaml.error import MarkedYAMLError
 
-from springs.core import from_dataclass, from_options, merge
-
+from .core import edit_list, from_dataclass, from_options, unsafe_merge
 from .nicknames import NicknameRegistry
 
 T = TypeVar("T")
@@ -51,8 +50,8 @@ def timestamp(fmt: Optional[str] = None) -> str:
 
 @register("sp.from_node")
 def from_node(
-    node_or_nickname: Union[DictConfig, str], *values: str
-) -> DictConfig:
+    node_or_nickname: Union[DictConfig, ListConfig, str], *values: str
+) -> Union[DictConfig, ListConfig]:
     """Instantiates a node from another node of a nickname to a config.
 
     Example:
@@ -109,6 +108,11 @@ def from_node(
         ) from e
 
     # do the merging
-    new_node = merge(node, replace)
+    if isinstance(node, DictConfig):
+        new_node = unsafe_merge(node, replace)
+    elif isinstance(node, ListConfig):
+        new_node = edit_list(node, replace)
+    else:
+        new_node = replace
 
     return new_node

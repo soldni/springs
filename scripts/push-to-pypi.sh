@@ -28,7 +28,7 @@ python3 -m build
 python3 -m twine upload dist/*
 
 # no need to keep all previous builds
-rm -rf dist/* build/*
+rm -rf dist/* build/* *.egg-info src/*.egg-info
 
 # go back to original dir
 cd ${CURRENT_DIR}
