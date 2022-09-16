@@ -1,14 +1,15 @@
-
 # Springs
 
+![springs_logo](https://github.com/soldni/springs/raw/main/assets/img/logo.png){:#hero}
+
 A set of utilities to turn [OmegaConf][1] into a fully fledge configuration utils.
-Just like the springs inside an Omega watch, they help you move with your experiments.
+Just like the springs inside an Omega watch, the Springs library helps you move on with your experiments.
 
 Springs overlaps in functionality with [Hydra][2], but without all the unnecessary boilerplate.
 
 The current logo for Springs was generated using [DALL·E 2][5].
 
-To install Springs, simply run
+To install Springs from [PyPI][6], simply run:
 
 ```bash
 pip install springs
@@ -26,33 +27,33 @@ We start by writing the following structure configuration
 import springs as sp
 from dataclasses import dataclass
 
-# this sub-config is for
-# data settings
-@dataclass
+# Data config
+# sp.dataclass is an alias for
+# dataclasses.dataclass
+@sp.dataclass
 class DataConfig:
     # sp.MISSING is an alias to
     # omegaconf.MISSING
     path: str = sp.MISSING
     split: str = 'train'
 
-# this sub-config is for
-# model settings
-@dataclass
+# Model config
+@sp.dataclass
 class ModelConfig:
     name: str = sp.MISSING
     num_labels: int = 2
 
 
-# this sub-config is for
-# experiment settings
-@dataclass
+# Experiment config
+@sp.dataclass
 class ExperimentConfig:
     batch_size: int = 16
     seed: int = 42
 
 
-# this is our overall config
-@dataclass
+# Overall config
+# for our program
+@sp.dataclass
 class Config:
     data: DataConfig = DataConfig()
     model: ModelConfig = ModelConfig()
@@ -117,7 +118,7 @@ python main.py -c config.yaml
 Easy, right?
 
 
-### Fine, We Do Support Support Unstructured Configurations
+### Fine, We Do Support Support Unstructured Configs!
 
 You are not required to used a structured config with Springs.
 To use our CLI with a bunch of yaml files and/or command line arguments, simply decorate your main function with no arguments.
@@ -137,7 +138,7 @@ instantiate an object from it.
 Springs supports this use case, and it is as easy as providing a `_target_` node in a configuration:
 
 ```python
-@dataclass
+@sp.dataclass
 class ModelConfig:
     _target_: str = (
         'transformers.'
@@ -154,13 +155,13 @@ In your experiment code, run:
 ```python
 def run_model(model_config: ModelConfig):
     ...
-    model = sp.init.now(model_config, ModelConfig)
+    model = sp.init.now(
+        model_config, ModelConfig
+    )
 ```
 
-**Note:** Previous versions of Springs supported specifying the return type,
-but now it is actively encouraged. Running `sp.init.now(model_config)` will
-now raise a warning if the type is not provided. To prevent this warning,
-use `sp.toggle_warnings(False)` before calling `sp.init.now`/ `sp.init.later`.
+**Note:** While previous versions of Springs merely supported specifying the return type, now it is actively and strongly encouraged.
+Running `sp.init.now(model_config)` will raise a warning if the type is not provided. To prevent this warning, use `sp.toggle_warnings(False)` before calling `sp.init.now`/ `sp.init.later`.
 
 ### `init.now` vs `init.later`
 
@@ -188,7 +189,7 @@ If, for some reason, cannot specify the path to a class as a string, you can use
 ```python
 import transformers
 
-@dataclass
+@sp.dataclass
 class ModelConfig:
     _target_: str = sp.Target.to_string(
         transformers.
@@ -208,7 +209,9 @@ To enable it, pass the expected return type when initializing an object:
 ```python
 @sp.cli(TokenizerConfig)
 def main(config: TokenizerConfig):
-    tokenizer = sp.init(config, PreTrainedTokenizerBase)
+    tokenizer = sp.init(
+        config, PreTrainedTokenizerBase
+    )
     print(tokenizer)
 ```
 
@@ -220,13 +223,12 @@ This will raise an error when the tokenizer is not a subclass of `PreTrainedToke
 Sometimes a configuration has some default parameters, but others are optional and depend on other factors, such as the `_target_` class.  In these cases, it is convenient to set up a flexible dataclass, using `make_flexy` after the `dataclass` decorator.
 
 ```python
-@sp.make_flexy
-@dataclass
+@sp.flexyclass
 class MetricConfig:
     _target_: str = sp.MISSING
     average: str = 'macro'
 
-config = sp.from_flexyclass(MetricConfig)
+config = sp.from_dataclass(MetricConfig)
 overrides = {
     # we override the _target_
     '_target_': 'torchmetrics.F1Score',
@@ -235,7 +237,8 @@ overrides = {
     'num_classes': 2
 }
 
-config = sp.merge(config, sp.from_dict(overrides))
+config = sp.merge(config,
+                  sp.from_dict(overrides))
 print(config)
 # this will print the following:
 # {
@@ -244,13 +247,6 @@ print(config)
 #    'num_classes': 2
 # }
 ```
-
-**Note:** In previous version of Springs, the canonical way to create a flexible class was to decorate a class with `@sp.flexyclass`. This method is still there, but it is not encouraged since it creates issues with `mypy` (and potentially other type checkers). Please consider switching to `dataclass` followed by `make_flexy`. To prevent a warning being raised for this, use
-`sp.toggle_warnings(False)` before calling `sp.flexyclass`.
-
-### Resolvers
-
-Guide coming soon!
 
 ## Tips and Tricks
 
@@ -299,3 +295,4 @@ test_config:
 [3]: https://devblogs.microsoft.com/python/announcing-pylance-fast-feature-rich-language-support-for-python-in-visual-studio-code/
 [4]: https://code.visualstudio.com
 [5]: https://openai.com/dall-e-2/
+[6]: https://pypi.org/project/springs/

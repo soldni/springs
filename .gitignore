@@ -134,3 +134,5 @@ dmypy.json
 
 # temp files
 tmp/
+Gemfile.lock
+_site/*

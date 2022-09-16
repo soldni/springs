@@ -1,6 +1,5 @@
 theme: jekyll-theme-minimal
-
 title: Springs
-description: A set of utilities to turn Dataclasses into useful configuration managers.
-logo: /static/logo.png
+description: A set of utilities to create and manage typed configuration files effectively, built on top of OmegaConf.
+logo: /assets/img/logo.png
 google_analytics: G-LXRX72YD7R

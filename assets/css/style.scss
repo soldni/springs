@@ -1,0 +1,95 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+
+header {
+    font-family: 'Atkinson Hyperlegible', sans-serif;
+    font-size: 90%;
+    line-height: 1.3;
+    p {
+        text-align: left;
+    }
+
+    h1 {
+        font-size: 2.5em;
+    }
+
+    @media(max-width: 960px) {
+      text-align: center;
+      padding: 0;
+      p {text-align: center}
+      h1 {text-align: center}
+
+      // float: center;
+      // margin-top: -8px;
+      // margin-left: auto;
+      // margin-right: auto;
+    }
+}
+
+body {
+  text-align: justify;
+
+  font-family: 'Atkinson Hyperlegible', sans-serif;
+  font-size: 100%;
+  line-height: 1.3;
+
+  // hide title when not on github
+  h1#springs {
+    visibility: hidden;
+    height: 0px;
+    margin-top: 0;
+    margin-bottom: -1.5em;
+  }
+  img#hero{
+    visibility: hidden;
+    height: 0px;
+  }
+
+}
+
+
+
+h1, h2, h3, h4, h5, h6 {
+  text-align: left;
+}
+
+li {
+  text-align: left;
+}
+
+
+/* mouse over link */
+a:hover {
+  color: #CA3B7D;
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: none;
+}
+
+code {
+  font-size: .8em;
+}
+
+
+h1 {
+    a:hover {
+    font-weight: bold;
+    text-decoration: none;
+  }
+}
+
+p.view {
+  margin-top: 5em;
+  @media(max-width: 960px) {
+    margin-top: 1em;
+  }
+}
+
+footer {
+  visibility: hidden;
+}
