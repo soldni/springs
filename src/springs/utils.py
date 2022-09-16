@@ -1,10 +1,14 @@
+import importlib.metadata
+import inspect
 import os
 import re
 import shutil
+import sys
 import warnings
 from ast import literal_eval
+from pathlib import Path
 from textwrap import dedent
-from typing import Any, Callable, Optional, Type, Union
+from typing import Any, Callable, Dict, Optional, Type, Union
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
@@ -14,6 +18,36 @@ def clean_multiline(string: str) -> str:
     string = dedent(string.strip())
     string = re.sub(r"\s*\n\s*", " ", string)
     return string
+
+
+def get_annotations(obj: Any) -> Dict[str, type]:
+    # use inspect.get_annotations if python >= 3.10
+    if sys.version_info >= (3, 10):
+        return inspect.get_annotations(obj)
+    else:
+        return getattr(obj, "__annotations__", {})
+
+
+def get_version() -> str:
+    """Get the version of the package."""
+
+    # This is a workaround for the fact that if the package is installed
+    # in editable mode, the version is not reliability available.
+    # Therefore, we check for the existence of a file called EDITABLE,
+    # which is not included in the package at distribution time.
+    path = Path(__file__).parent / "EDITABLE"
+    if path.exists():
+        return "dev"
+
+    try:
+        # package has been installed, so it has a version number
+        # from pyproject.toml
+        version = importlib.metadata.version(__package__ or __name__)
+    except importlib.metadata.PackageNotFoundError:
+        # package hasn't been installed, so set version to "dev"
+        version = "dev"
+
+    return version
 
 
 class PrintUtils:
@@ -134,31 +168,22 @@ class SpringsWarnings:
             )
 
     @classmethod
-    def flexyclass(cls: Type["SpringsWarnings"]):
-        cls._warn(
-            clean_multiline(
-                """Decorating with `flexyclass` is discouraged because it
-                   does not play nicely with mypy, resulting in incorrect
-                   type annotations. Instead, consider decorating with
-                   `@springs.dataclass` first, and then decorating
-                   `@springs.make_flexy` on the resulting class."""
-            ),
-            category=UserWarning,
-        )
+    def deprecated(
+        cls: Type["SpringsWarnings"],
+        deprecated: str,
+        removed_when: Optional[str] = None,
+        replacement: Optional[str] = None,
+    ):
+        msg = f"`{deprecated}` is deprecated"
+        if removed_when:
+            msg += f" and will be removed in Springs {removed_when}."
+        else:
+            msg += " and may be removed in a future version."
 
-    @classmethod
-    def flexyfield(cls: Type["SpringsWarnings"]):
-        cls._warn(
-            clean_multiline(
-                """`flexy_field` is provided as a convenience for passing
-                values that are not explicitly annotated for a flexyclass;
-                however, it is not recommended because it not very pythonic.
-                Instead, creating an flexyclass that inherits from the current
-                one with the desired field and default value. Non explicit
-                values are expected to be provided at runtime. """
-            ),
-            category=UserWarning,
-        )
+        if replacement:
+            msg += f" Use `{replacement}` instead."
+
+        cls._warn(message=msg, category=DeprecationWarning)
 
     @classmethod
     def argument(cls: Type["SpringsWarnings"], arg_name: str, obj_name: str):

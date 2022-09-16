@@ -1,126 +1,92 @@
-import inspect
-from dataclasses import dataclass, field, fields, is_dataclass, make_dataclass
-from functools import wraps
-from typing import Any, Callable, Type, TypeVar
+from copy import deepcopy
+from dataclasses import MISSING as DT_MISSING
+from dataclasses import Field, field, fields, is_dataclass
+from typing import Any, Dict, Generic, Type, TypeVar
 
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf import MISSING as OC_MISSING
 from typing_extensions import dataclass_transform
 
-from .traversal import traverse
-from .types import get_type
-from .utils import SpringsWarnings
+from .utils import get_annotations
 
-DT = TypeVar("DT")
+C = TypeVar("C", bound=Any)
 
 
-FLEXY_FLAG = "__flexyclass__"
+class FlexyClass(dict, Generic[C]):
+    """A FlexyClass is a dictionary with some default values assigned to it
+    FlexyClasses are generally not used directly, but rather creating using
+    the `flexyclass` decorator.
 
-
-@dataclass_transform()
-def make_flexy(cls_: Type[DT]) -> Type[DT]:
-    """A flexyclass is like a dataclass, but it supports partial
-    specification of properties."""
-
-    if not inspect.isclass(cls_) or not is_dataclass(cls_):
-        raise TypeError(f"flexyclass must decorate a dataclass, not {cls_}")
-
-    setattr(cls_, FLEXY_FLAG, FLEXY_FLAG)
-
-    return cls_  # pyright: ignore
-
-
-def is_flexy(obj_or_cls: Any) -> bool:
-    """Returns true if a class or configuration is flexy, false otherwise"""
-
-    if isinstance(obj_or_cls, (DictConfig, ListConfig)):
-        # case 1: we got a omega dict/list config; in this case, we use
-        # the get_type function to peek inside it.
-        obj_or_cls = get_type(obj_or_cls)
-
-    if not inspect.isclass(obj_or_cls):
-        # case 2: we got a generic instance of a dataclass; then we get
-        # the type directly
-        obj_or_cls = type(obj_or_cls)
-
-    # finally, we look for the flag
-    return hasattr(obj_or_cls, FLEXY_FLAG)
-
-
-@dataclass_transform()
-def flexyclass(cls: Type[DT]) -> Type[DT]:
-    """A flexyclass is like a dataclass, but it supports partial
-    specification of properties."""
-    SpringsWarnings.flexyclass()
-    return make_flexy(dataclass(cls))
-
-
-def flexy_field(type_: Type[DT], /, **kwargs: Any) -> DT:
-    """A flexy_ field is like dataclass.field, but it supports
-    passing arbitrary keyword arguments to a flexyclass.
-
-    Args:
-        type_: The flexyclass this field is for.
-        kwargs: Any keyword arguments to pass to the flexyclass.
+    NOTE: When instantiating a new FlexyClass object directly, the constructor
+    actually returns a `dataclasses.Field` object. This is for API consistency
+    with how dataclasses are used in a structured configuration. If you want to
+    access values in the FlexyClass directly, use FlexyClass.defaults property.
     """
-    SpringsWarnings.flexyfield()
 
-    if not is_dataclass(type_) and not is_flexy(type_):
-        raise TypeError(f"flexy_field must receive a flexyclass, not {type_}")
+    __origin__: type = dict
+    __flexyclass_defaults__: Dict[str, Any] = {}
 
-    # find the argument that are extra from what has been defined in
-    # the flexyclass.
-    known_fields = set(f.name for f in fields(type_))
-    known_kwargs, extra_kwargs = {}, {}
-    for k, v in kwargs.items():
-        if k in known_fields:
-            known_kwargs[k] = v
+    @classmethod
+    def _unpack_if_dataclass_field(cls, value: Any) -> Any:
+        if isinstance(value, Field):
+            if value.default_factory is not DT_MISSING:
+                value = value.default_factory()
+            elif value.default is not DT_MISSING:
+                value = value.default
+            else:
+                value = OC_MISSING
         else:
-            extra_kwargs[k] = v
+            value = value
 
-    # decorate
-    if extra_kwargs:
-        cls_ = make_dataclass(
-            cls_name=f"{type_.__name__}_{'_'.join(extra_kwargs)}",
-            fields=[
-                (f_name, type(f_value), field(default_factory=lambda: f_value))
-                for f_name, f_value in extra_kwargs.items()
-            ],
-            bases=(type_,),
+        if isinstance(value, dict):
+            value = {
+                k: cls._unpack_if_dataclass_field(v) for k, v in value.items()
+            }
+        elif isinstance(value, list):
+            value = [cls._unpack_if_dataclass_field(v) for v in value]
+
+        return value
+
+    @classmethod
+    @property
+    def defaults(cls):
+        """The default values for the FlexyClass"""
+
+        return cls._unpack_if_dataclass_field(
+            deepcopy(cls.__flexyclass_defaults__)
         )
-    else:
-        cls_ = type_
 
-    new_field: DT = field(
-        default_factory=lambda: cls_(**known_kwargs)  # type: ignore
-    )
-    return new_field
+    def __new__(cls, **kwargs):
+        # We completely change how the constructor works to allow users
+        # to use flexyclasses in the same way they would use a dataclass.
+        factory_dict: Dict[str, Any] = {}
+        factory_dict = {**cls.defaults, **kwargs}
+        return field(default_factory=lambda: factory_dict)
+
+    @classmethod
+    def flexyclass(cls, target_cls: Type[C]) -> Type["FlexyClass"]:
+        """Decorator to create a FlexyClass from a class"""
+
+        if is_dataclass(target_cls):
+            attributes_iterator = ((f.name, f) for f in fields(target_cls))
+        else:
+            attributes_iterator = (
+                (f_name, getattr(target_cls, f_name, OC_MISSING))
+                for f_name in get_annotations(target_cls)
+            )
+
+        defaults = {
+            f_name: cls._unpack_if_dataclass_field(f_value)
+            for f_name, f_value in attributes_iterator
+        }
+
+        return type(
+            target_cls.__name__,
+            (FlexyClass,),
+            {"__flexyclass_defaults__": defaults},
+        )
 
 
-DictOrListConfig = TypeVar("DictOrListConfig", DictConfig, ListConfig)
-
-
-def unlock_all_flexyclasses(
-    cast_fn: Callable[..., DictOrListConfig]
-) -> Callable[..., DictOrListConfig]:
-    """Unlock all flexy classes in a configuration so they can be
-    merged without causing disruption."""
-
-    @wraps(cast_fn)
-    def unlock_fn(*args, **kwargs):
-        config_node = cast_fn(*args, **kwargs)
-
-        for spec in traverse(
-            node=config_node, include_nodes=True, include_root=True
-        ):
-
-            if not isinstance(spec.value, DictConfig):
-                # only DictConfigs can be flexyclasses
-                continue
-
-            typ_ = get_type(spec.value)
-            if typ_ and is_flexy(typ_):
-                OmegaConf.set_struct(spec.value, False)
-
-        return config_node
-
-    return unlock_fn
+@dataclass_transform()
+def flexyclass(cls: Type[C]) -> Type[FlexyClass[C]]:
+    """Alias for FlexyClass.flexyclass"""
+    return FlexyClass.flexyclass(cls)

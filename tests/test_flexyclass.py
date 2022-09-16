@@ -1,42 +1,36 @@
 import unittest
-import warnings
+from dataclasses import dataclass
 
-import springs as sp
-from springs.flexyclasses import flexy_field
+from springs import MISSING, from_dataclass, from_dict, make_target
+from springs.flexyclasses import flexyclass
 
 
-@sp.make_flexy
-@sp.dataclass
+@flexyclass
+@dataclass
 class FlexyConfig:
-    a: int = sp.MISSING
+    a: int = MISSING
 
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-
-    @sp.dataclass
-    class FlexyConfigContainer:
-        f1: FlexyConfig = FlexyConfig(a=1)
-        f2: FlexyConfig = flexy_field(FlexyConfig, a=1, b=2)
+@dataclass
+class FlexyConfigContainer:
+    f1: FlexyConfig = FlexyConfig(a=1)
+    f2: FlexyConfig = FlexyConfig(a=1, b=2)  # type: ignore
 
 
-@sp.make_flexy
-@sp.dataclass
+@flexyclass
 class PipelineStepConfig:
-    _target_: str = sp.MISSING
+    _target_: str = MISSING
 
 
 class TestFlexyClass(unittest.TestCase):
     def test_flexyclass(self):
         di = {"a": 1, "b": 2}
-        config = sp.from_dict(
-            {"_target_": sp.Target.to_string(FlexyConfig), **di}
-        )
+        config = from_dict({"_target_": make_target(FlexyConfig), **di})
         self.assertEqual(config.a, di["a"])
         self.assertEqual(config.b, di["b"])
 
     def test_flexyclass_container(self):
-        config = sp.from_dataclass(FlexyConfigContainer)
+        config = from_dataclass(FlexyConfigContainer)
         self.assertTrue(
             hasattr(config.f2, "b"), "FlexyConfigContainer.f1.b is not set"
         )

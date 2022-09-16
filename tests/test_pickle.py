@@ -9,7 +9,7 @@ class ConfigA:
     a: int = 1
 
 
-@sp.make_flexy
+@sp.flexyclass
 @sp.dataclass
 class ConfigB:
     b: int = 2
