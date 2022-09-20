@@ -47,7 +47,6 @@ class FlexyClass(dict, Generic[C]):
         return value
 
     @classmethod
-    @property
     def defaults(cls):
         """The default values for the FlexyClass"""
 
@@ -59,7 +58,7 @@ class FlexyClass(dict, Generic[C]):
         # We completely change how the constructor works to allow users
         # to use flexyclasses in the same way they would use a dataclass.
         factory_dict: Dict[str, Any] = {}
-        factory_dict = {**cls.defaults, **kwargs}
+        factory_dict = {**cls.defaults(), **kwargs}
         return field(default_factory=lambda: factory_dict)
 
     @classmethod
