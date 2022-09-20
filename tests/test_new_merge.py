@@ -68,7 +68,7 @@ class TestNewMerge(unittest.TestCase):
         self.assertEqual(out.c._target_, "springs.core")
 
     def test_third_override(self):
-        override_dict = {"cn": {"c_1": {**ObjConfig.defaults, "bar": 33}}}
+        override_dict = {"cn": {"c_1": {**ObjConfig.defaults(), "bar": 33}}}
 
         config: DictConfig = OmegaConf.structured(AppCfg)
         out = merge(config, OmegaConf.create(override_dict))

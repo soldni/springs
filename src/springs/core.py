@@ -48,7 +48,7 @@ def from_dataclass(config: Any) -> DictConfig:
         return from_none()
 
     if isclass(config) and issubclass(config, FlexyClass):
-        config = config.defaults
+        config = config.defaults()
 
     elif not is_dataclass(config):
         raise TypeError(f"`{config}` is not a dataclass!")
