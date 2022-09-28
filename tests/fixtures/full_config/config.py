@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import springs as sp
 
-
 PL = "pytorch_lightning"
 
 

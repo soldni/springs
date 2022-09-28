@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from omegaconf import MISSING, DictConfig, ListConfig
 
@@ -23,68 +22,20 @@ from .core import (
 from .flexyclasses import flexyclass
 from .initialize import Target, init
 from .logging import configure_logging
-from .nicknames import NicknameRegistry
 from .resolvers import all_resolvers, register
+from .shortcuts import (
+    fdict,
+    flist,
+    make_flexy,
+    make_target,
+    nickname,
+    toggle_warnings,
+)
 from .traversal import traverse
 from .types import get_type
-from .utils import SpringsWarnings, get_version
+from .utils import get_version
 
 __version__ = get_version()
-
-
-T = TypeVar("T")
-
-
-def toggle_warnings(value: Optional[bool] = None):
-    """Shortcut for springs.utils.SpringsWarnings.toggle"""
-    SpringsWarnings.toggle(value)
-
-
-def make_target(c: Callable) -> str:
-    """Shortcut for springs.initialize.Target.to_string"""
-    return Target.to_string(c)
-
-
-def nickname(name: str) -> Callable[[Type[T]], Type[T]]:
-    """Shortcut for springs.nicknames.NicknameRegistry.add"""
-    return NicknameRegistry.add(name)
-
-
-def make_flexy(cls_: Any) -> Any:
-    """Shortcut for springs.flexyclasses.flexyclass"""
-
-    SpringsWarnings.deprecated(
-        deprecated="make_flexy",
-        replacement="flexyclass",
-    )
-    return flexyclass(cls_)
-
-
-def fdict(**kwargs: Any) -> Dict[str, Any]:
-    """Shortcut for creating a Field with a default_factory that returns
-    a dictionary.
-
-    Args:
-        **kwargs: values for the dictionary returned by default factory"""
-
-    def _factory_fn() -> Dict[str, Any]:
-        return {**kwargs}
-
-    return field(default_factory=_factory_fn)
-
-
-def flist(*args: Any) -> List[Any]:
-    """Shortcut for creating a Field with a default_factory that returns
-    a list.
-
-    Args:
-        *args: values for the list returned by default factory"""
-
-    def _factory_fn() -> List[Any]:
-        return [*args]
-
-    return field(default_factory=_factory_fn)
-
 
 __all__ = [
     "all_resolvers",
