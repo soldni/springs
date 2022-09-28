@@ -26,6 +26,7 @@ from .resolvers import all_resolvers, register
 from .shortcuts import (
     fdict,
     flist,
+    get_nickname,
     make_flexy,
     make_target,
     nickname,
@@ -55,6 +56,7 @@ __all__ = [
     "from_none",
     "from_options",
     "from_string",
+    "get_nickname",
     "get_type",
     "init",
     "ListConfig",

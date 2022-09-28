@@ -19,7 +19,7 @@ R = TypeVar("R")
 
 def memoize(
     cachedir: Optional[Union[Path, str]] = None,
-    appname: Optional[Union[str, Tuple[str]]] = None,
+    appname: Optional[Union[str, Tuple[str, ...]]] = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Memoize a function call to disk.
 
@@ -27,7 +27,7 @@ def memoize(
         cachedir (Optional[Union[Path, str]], optional): Directory to store
             cached results. If not provided, we use the platform-specific
             user cache directory we get from platformdirs.
-        appname (Optional[Union[str, Tuple[str]]], optional): Name of the
+        appname (Optional[Union[str, Tuple[str, ...]]], optional): Name of the
             application to use for the cache directory. If not provided and
             cachedir is not provided, an error is raised. It can either be a
             string or a tuple of strings. If a tuple, a subdirectory is created

@@ -9,6 +9,15 @@ from .utils import SpringsWarnings
 T = TypeVar("T")
 
 
+def get_nickname(name: str, raise_if_missing: bool = False) -> Optional[Type]:
+    """Shortcut for springs.nicknames.NicknameRegistry.get"""
+    # slightly clunky but annoyingly doesn't work with typing
+    if raise_if_missing:
+        return NicknameRegistry.get(name)
+    else:
+        return NicknameRegistry.get(name, raise_if_missing=False)
+
+
 def toggle_warnings(value: Optional[bool] = None):
     """Shortcut for springs.utils.SpringsWarnings.toggle"""
     SpringsWarnings.toggle(value)

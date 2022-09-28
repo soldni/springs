@@ -34,7 +34,7 @@ class NicknameRegistry:
 
     @overload
     @classmethod
-    def get(cls, name: str, raise_if_missing: Literal[True] = True) -> Type[T]:
+    def get(cls, name: str, raise_if_missing: Literal[True] = True) -> Type:
         ...
 
     @overload
