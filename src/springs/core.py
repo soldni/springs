@@ -1,3 +1,4 @@
+import json
 from collections import abc
 from copy import deepcopy
 from dataclasses import asdict, is_dataclass
@@ -11,9 +12,13 @@ from typing import overload
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.errors import MissingMandatoryValue
 from omegaconf.omegaconf import DictKeyType
+from yaml.scanner import ScannerError
 
 from .flexyclasses import FlexyClass
 from .traversal import FailedParamSpec, traverse
+
+DEFAULT: Any = "***"
+
 
 C = TypeVar("C", bound=Union[DictConfig, ListConfig])
 
@@ -112,12 +117,24 @@ def from_string(config: str) -> DictConfig:
 
 
 def from_file(path: Union[str, Path]) -> DictConfig:
-    """Load a config from a file"""
+    """Load a config from a file, either YAML or JSON"""
     path = Path(path)
 
     if not path.exists():
         raise FileNotFoundError(f"Cannot file configuration at {path}")
-    config = OmegaConf.load(path)
+
+    try:
+        # if it fails, it's not a yaml file
+        config = OmegaConf.load(path)
+    except ScannerError:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                config = from_python(json.load(f))
+        except json.JSONDecodeError:
+            raise ValueError(
+                f"Cannot parse configuration at {path}; "
+                "not a valid YAML or JSON file"
+            )
 
     if not isinstance(config, DictConfig):
         raise ValueError(f"Config loaded from {path} is not a DictConfig!")
@@ -143,6 +160,13 @@ def to_yaml(config: Any) -> str:
     if not isinstance(config, DictConfig):
         config = from_dataclass(config)
     return OmegaConf.to_yaml(config)
+
+
+def to_json(config: Any) -> str:
+    """Convert a omegaconf config to a JSON string"""
+    if not isinstance(config, DictConfig):
+        config = from_dataclass(config)
+    return json.dumps(to_python(config))
 
 
 def to_python(config: Any) -> Any:
