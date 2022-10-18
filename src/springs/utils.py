@@ -107,7 +107,9 @@ class SpringsWarnings:
 class SpringsConfig:
     """A class to hold the configuration for Springs"""
 
-    RICH_LOCALS: bool = False
+    RICH_LOCALS: bool = literal_eval(
+        os.environ.get("SPRINGS_RICH_LOCALS", "False")
+    )
 
     def toggle_rich_locals(self, value: Optional[bool] = None):
         if value is None:
