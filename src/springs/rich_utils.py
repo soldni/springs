@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional, Sequence, Union
+from argparse import ArgumentParser, HelpFormatter
+from typing import IO, Any, Dict, Optional, Sequence, Type, Union
 
 from omegaconf import DictConfig, ListConfig
 from rich.console import Console
@@ -86,3 +87,25 @@ def print_config_as_tree(title: str, config: Union[DictConfig, ListConfig]):
         )
 
     Console().print(root)
+
+
+class RichFormatter(HelpFormatter):
+    ...
+
+
+class RichArgumentParser(ArgumentParser):
+    def __init__(
+        self,
+        *args,
+        formatter_class: Type[HelpFormatter] = RichFormatter,
+        console_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.console_kwargs = console_kwargs or {}
+
+    def _print_message(
+        self, message: Any, file: Optional[IO[str]] = None
+    ) -> None:
+        console = Console(**{**self.console_kwargs, "file": file})
+        console.print(message)

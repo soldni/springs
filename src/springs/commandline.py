@@ -1,9 +1,7 @@
-import os
 import sys
-from argparse import Action, ArgumentParser
+from argparse import Action
 from dataclasses import dataclass, fields, is_dataclass
-from inspect import getfile, getfullargspec, isclass
-from pathlib import Path
+from inspect import getfullargspec, isclass
 from typing import (
     Any,
     Callable,
@@ -27,7 +25,12 @@ from .core import (
     merge,
     unsafe_merge,
 )
-from .rich_utils import add_pretty_traceback, print_config_as_tree, print_table
+from .rich_utils import (
+    RichArgumentParser,
+    add_pretty_traceback,
+    print_config_as_tree,
+    print_table,
+)
 
 # parameters for the main function
 MP = ParamSpec("MP")
@@ -64,7 +67,7 @@ class Flag:
     def long(self) -> str:
         return f"--{self.name}"
 
-    def add_argparse(self, parser: ArgumentParser) -> Action:
+    def add_argparse(self, parser: RichArgumentParser) -> Action:
         kwargs: Dict[str, Any] = {"help": self.help}
         if self.action is not MISSING:
             kwargs["action"] = self.action
@@ -136,7 +139,7 @@ class CliFlags:
             if isinstance(maybe_flag, Flag):
                 yield maybe_flag
 
-    def add_argparse(self, parser: ArgumentParser) -> Sequence[Action]:
+    def add_argparse(self, parser: RichArgumentParser) -> Sequence[Action]:
         return [flag.add_argparse(parser) for flag in self.flags]
 
     @property
@@ -144,21 +147,14 @@ class CliFlags:
         """Print the usage string for the CLI flags."""
         return " ".join(flag.usage for flag in self.flags)
 
-    def make_cli(self, func: Callable, name: str) -> ArgumentParser:
+    def make_cli(self, func: Callable, name: str) -> RichArgumentParser:
         """Sets up argument parser ahead of running the CLI. This includes
         creating a help message, and adding a series of flags."""
-
-        # we find the path to the script we are decorating with the
-        # cli so that we can display that to the user.
-        current_dir = Path(os.getcwd())
-        path_to_fn_file = Path(getfile(func))
-        rel_fn_file_path = str(path_to_fn_file).replace(str(current_dir), "")
-
         # Program name and usage added here.
-        ap = ArgumentParser(
+        ap = RichArgumentParser(
             description=f"Parser for configuration {name}",
             usage=(
-                f"python3 {rel_fn_file_path} {self.usage} "
+                f"python3 {sys.argv[0]} {self.usage} "
                 "param1=value1 … paramN=valueN"
             ),
         )
