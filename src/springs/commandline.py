@@ -27,7 +27,7 @@ from .core import (
     merge,
     unsafe_merge,
 )
-from .rich_utils import add_pretty_traceback, print_table, print_tree
+from .rich_utils import add_pretty_traceback, print_config_as_tree, print_table
 
 # parameters for the main function
 MP = ParamSpec("MP")
@@ -254,7 +254,7 @@ def wrap_main_method(
 
     # Print default options if requested py the user
     if opts.options:
-        print_tree(title="Default Options", config=config_node)
+        print_config_as_tree(title="Default Options", config=config_node)
 
     # This configuration is used to accumulate all options across
     # various config files and the CLI.
@@ -268,7 +268,7 @@ def wrap_main_method(
 
         # print the configuration if requested by the user
         if opts.inputs:
-            print_tree(
+            print_config_as_tree(
                 title=f"[blue]Input From File {config_file}[/blue]",
                 config=file_config,
             )
@@ -281,7 +281,7 @@ def wrap_main_method(
 
     # print the configuration if requested by the user
     if opts.inputs:
-        print_tree(
+        print_config_as_tree(
             title="[red]Input From Command Line[/red]", config=cli_config
         )
 
@@ -301,7 +301,9 @@ def wrap_main_method(
 
     # print it if requested
     if not (opts.quiet) or opts.parsed:
-        print_tree(title="[green]Parsed Config[/green]", config=parsed_config)
+        print_config_as_tree(
+            title="[green]Parsed Config[/green]", config=parsed_config
+        )
 
     if do_no_run:
         # we are not running because the user has requested to print

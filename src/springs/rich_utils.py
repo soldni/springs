@@ -42,11 +42,12 @@ def print_table(
     Console().print(table)
 
 
-def print_tree(title: str, config: Union[DictConfig, ListConfig]):
+def print_config_as_tree(title: str, config: Union[DictConfig, ListConfig]):
     def get_parent_path(path: str) -> str:
         return path.rsplit(".", 1)[0] if "." in path else ""
 
     trees: Dict[str, Tree] = {"": (root := Tree(f"[bold]\n{title}[/bold]"))}
+    nodes_order: Dict[str, Dict[str, int]] = {}
 
     all_nodes = sorted(
         traverse(config, include_nodes=True, include_leaves=False),
@@ -58,23 +59,30 @@ def print_tree(title: str, config: Union[DictConfig, ListConfig]):
         if spec.key is None or tree is None:
             raise ValueError("Cannot print disjoined tree")
 
-        color = "magenta" if isinstance(spec.value, DictConfig) else "cyan"
-        repr_ = spec.key if isinstance(spec.key, str) else f"[{spec.key}]"
-
-        subtree = tree.add(label=f"[bold {color}]{repr_}[/bold {color}]")
+        label = "[bold {color}]{repr}[/bold {color}]".format(
+            color="magenta" if isinstance(spec.value, DictConfig) else "cyan",
+            repr=spec.key if isinstance(spec.key, str) else f"[{spec.key}]",
+        )
+        subtree = tree.add(label=label)
         trees[spec.path] = subtree
+        nodes_order.setdefault(parent_path, {})[label] = spec.position
 
     for spec in traverse(config, include_nodes=False, include_leaves=True):
-        tree = trees.get(get_parent_path(spec.path), None)
+        parent_path = get_parent_path(spec.path)
+        tree = trees.get(parent_path, None)
         if tree is None:
             raise ValueError("Cannot print disjoined tree")
 
-        tree.add(
-            label=(
-                f"[bold]{spec.key}[/bold] "
-                f"([italic]{spec.type.__name__}[/italic]) "
-                f"= {spec.value}"
-            )
+        label = (
+            f"[bold]{spec.key}[/bold] ({spec.type.__name__}) = {spec.value}"
+        )
+        tree.add(label=label)
+        nodes_order.setdefault(parent_path, {})[label] = spec.position
+
+    for label, tree in trees.items():
+        # sort nodes in each tree to match the order the appear in the config
+        tree.children.sort(
+            key=lambda child: nodes_order[label][str(child.label)]
         )
 
     Console().print(root)

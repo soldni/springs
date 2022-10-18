@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, Iterator, Optional, Type, Union
 from typing import cast as typecast
 
@@ -22,6 +23,17 @@ class ParamSpec:
         if self.key is None:
             raise ValueError("Cannot get type of root node")
         return OmegaConf.get_type(self.parent, str(self.key))
+
+    @cached_property
+    def position(self) -> int:
+        if self.key is None:
+            return -1
+        elif isinstance(self.key, int):
+            return self.key
+        elif isinstance(self.parent, DictConfig):
+            return tuple(self.parent.keys()).index(self.key)
+        else:
+            raise ValueError("Cannot get position of this key in parent")
 
 
 @dataclass
