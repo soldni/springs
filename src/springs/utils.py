@@ -2,16 +2,12 @@ import importlib.metadata
 import inspect
 import os
 import re
-import shutil
 import sys
 import warnings
 from ast import literal_eval
 from pathlib import Path
 from textwrap import dedent
-from typing import Any, Callable, Dict, Optional, Type, Union
-
-import yaml
-from omegaconf import DictConfig, OmegaConf
+from typing import Any, Dict, Optional, Type
 
 
 def clean_multiline(string: str) -> str:
