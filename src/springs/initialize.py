@@ -500,5 +500,14 @@ class init(Generic[InitT, CallableT]):
         )
         return init_call()
 
-    """Convenience shortcut for `init.now`"""
-    __new__: Callable[..., InitT] = now  # type: ignore
+    @classmethod
+    def __new__(  # type: ignore
+        cls: Type["init"],
+        _config_: Optional[Any] = None,
+        _type_: Optional[Type[InitT]] = None,
+        _recursive_: bool = True,
+        /,
+        **kwargs: Any,
+    ) -> InitT:
+        """Convenience shortcut for `init.now`"""
+        return cls.now(_config_, _type_, _recursive_, **kwargs)

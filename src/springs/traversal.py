@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Iterator, Optional, Union
+from typing import Any, Iterator, Optional, Type, Union
 from typing import cast as typecast
 
 from omegaconf import MISSING, DictConfig, ListConfig, OmegaConf
@@ -16,6 +16,12 @@ class ParamSpec:
 
     def is_node(self) -> bool:
         return isinstance(self.value, (DictConfig, ListConfig))
+
+    @property
+    def type(self) -> Type:
+        if self.key is None:
+            raise ValueError("Cannot get type of root node")
+        return OmegaConf.get_type(self.parent, str(self.key))
 
 
 @dataclass
@@ -63,17 +69,22 @@ def traverse(
                             interpol=is_interpolation,
                         )
 
-            if include_nodes or include_leaves:
-                # we yield the node if it is not a container, or if
-                # we are specifically asked to include nodes
-                yield ParamSpec(
-                    key=key,
-                    # [num] is the notation for list indices
-                    path=f"[{key}]",
-                    value=value,
-                    parent=node,
-                    interpol=is_interpolation,
-                )
+            current_node_spec = ParamSpec(
+                key=key,
+                # [num] is the notation for list indices
+                path=f"[{key}]",
+                value=value,
+                parent=node,
+                interpol=is_interpolation,
+            )
+
+            # we yield the node if it is not a container, or if
+            # we are specifically asked to include nodes
+            if current_node_spec.is_node():
+                if include_nodes:
+                    yield current_node_spec
+            elif include_leaves:
+                yield current_node_spec
 
     elif isinstance(node, DictConfig):
         for key in node.keys():
@@ -106,16 +117,21 @@ def traverse(
                             interpol=is_interpolation,
                         )
 
-            if include_nodes or include_leaves:
-                # we yield the node if it is not a container, or if
-                # we are specifically asked to include nodes
-                yield ParamSpec(
-                    key=str(key),
-                    path=str(key),
-                    value=value,
-                    parent=node,
-                    interpol=is_interpolation,
-                )
+            current_node_spec = ParamSpec(
+                key=str(key),
+                path=str(key),
+                value=value,
+                parent=node,
+                interpol=is_interpolation,
+            )
+
+            # we yield the node if it is not a container, or if
+            # we are specifically asked to include nodes
+            if current_node_spec.is_node():
+                if include_nodes:
+                    yield current_node_spec
+            elif include_leaves:
+                yield current_node_spec
 
     else:
         raise ValueError(

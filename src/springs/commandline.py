@@ -25,10 +25,9 @@ from .core import (
     from_none,
     from_options,
     merge,
-    traverse,
     unsafe_merge,
 )
-from .utils import PrintUtils
+from .rich_utils import add_pretty_traceback, print_table, print_tree
 
 # parameters for the main function
 MP = ParamSpec("MP")
@@ -224,9 +223,6 @@ def wrap_main_method(
 
         configure_logging.debug()
 
-    # Setup an utility to deal with printing
-    pu = PrintUtils(print_fn=print_fn)
-
     # We don't run the main program if the user
     # has requested to print the any of the config.
     do_no_run = (
@@ -241,26 +237,24 @@ def wrap_main_method(
         # relative import here not to mess things up
         from .resolvers import all_resolvers
 
-        pu.print("RESOLVERS:", *all_resolvers(), level_up=1)
+        print_table(
+            title="Registered Resolvers",
+            columns=["Resolver Name"],
+            values=[(r,) for r in sorted(all_resolvers())],
+        )
 
     if opts.nicknames:
         from .nicknames import NicknameRegistry
 
-        pu.print(
-            "NICKNAMES:",
-            *(": ".join(e) for e in NicknameRegistry.all()),
-            level_up=1,
+        print_table(
+            title="Registered Nicknames",
+            columns=["Nickname", "Path"],
+            values=NicknameRegistry().all(),
         )
 
     # Print default options if requested py the user
     if opts.options:
-        params = traverse(config_node)
-
-        cli_opts_repr = ("OPTS/CLI FLAG:",) + tuple(
-            f"{p.path} = " + (str(p.value) if p.value != "" else "''")
-            for p in params
-        )
-        pu.print(*cli_opts_repr, level_up=1)
+        print_tree(title="Default Options", config=config_node)
 
     # This configuration is used to accumulate all options across
     # various config files and the CLI.
@@ -274,7 +268,10 @@ def wrap_main_method(
 
         # print the configuration if requested by the user
         if opts.inputs:
-            pu.print(f"INPUT/FILE {config_file}:", file_config)
+            print_tree(
+                title=f"[blue]Input From File {config_file}[/blue]",
+                config=file_config,
+            )
 
         # merge the file config with the main config
         accumulator_config = unsafe_merge(accumulator_config, file_config)
@@ -284,7 +281,9 @@ def wrap_main_method(
 
     # print the configuration if requested by the user
     if opts.inputs:
-        pu.print("INPUT/CLI ARGS:", cli_config)
+        print_tree(
+            title="[red]Input From Command Line[/red]", config=cli_config
+        )
 
     # merge the cli config with the main config, do it last
     # so that cli takes precedence over config files.
@@ -302,7 +301,7 @@ def wrap_main_method(
 
     # print it if requested
     if not (opts.quiet) or opts.parsed:
-        pu.print("PARSE/ALL CFG:", parsed_config)
+        print_tree(title="[green]Parsed Config[/green]", config=parsed_config)
 
     if do_no_run:
         # we are not running because the user has requested to print
@@ -360,6 +359,9 @@ def cli(
     Returns:
         Callable: A decorator that can be used to decorate a method.
     """
+
+    # setup nice traceback through rich library
+    add_pretty_traceback()
 
     if config_node_cls is None:
         config_node = from_none()
