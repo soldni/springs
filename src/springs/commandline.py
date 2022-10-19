@@ -238,7 +238,7 @@ def wrap_main_method(
             columns=["Resolver Name"],
             values=[(r,) for r in sorted(all_resolvers())],
             caption=(
-                "Resolvers use syntax ${resolver_name:'arg1','arg2'}. "
+                "Resolvers use syntax ${resolver_name:'arg1','arg2'}.\n"
                 "For more information, visit https://omegaconf.readthedocs.io/"
                 "en/latest/custom_resolvers.html"
             ),

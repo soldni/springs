@@ -31,8 +31,11 @@ def print_table(
         # repeat colors if we have more columns than colors
         colors = colors * (len(columns) // len(colors) + 1)
 
+    def _get_longest_row(text: str) -> int:
+        return max(len(row) for row in text.splitlines())
+
     min_width = min(
-        max(len(title), len(caption or "")) + 2,
+        max(_get_longest_row(title), _get_longest_row(caption or "")) + 2,
         os.get_terminal_size().columns - 2,
     )
 
