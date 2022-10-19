@@ -1,6 +1,6 @@
 [project]
 name = "springs"
-version = "1.5.2"
+version = "1.6.0"
 description = "A set of utilities to create and manage typed configuration files effectively, built on top of OmegaConf."
 authors = [
     {name = "Luca Soldaini", email = "luca@soldaini.net" }
@@ -14,7 +14,7 @@ dependencies = [
     "typing_extensions>=4.2.0",
     "get-annotations>=0.1.2",
     "platformdirs>=2.5.0",
-    "rich>=12.0.0",
+    "rich>=11.0.0",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

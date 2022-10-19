@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional, Sequence, Union
+from argparse import ArgumentParser, HelpFormatter
+import os
+from typing import IO, Any, Dict, Optional, Sequence, Type, Union
 
 from omegaconf import DictConfig, ListConfig
 from rich.console import Console
@@ -20,6 +22,7 @@ def print_table(
     columns: Sequence[str],
     values: Sequence[Sequence[Any]],
     colors: Optional[Sequence[str]] = None,
+    caption: Optional[str] = None,
 ):
     colors = list(
         colors or ["magenta", "cyan", "red", "green", "yellow", "blue"]
@@ -28,13 +31,21 @@ def print_table(
         # repeat colors if we have more columns than colors
         colors = colors * (len(columns) // len(colors) + 1)
 
+    min_width = min(
+        max(len(title), len(caption or '')) + 2,
+        os.get_terminal_size().columns - 2
+    )
+
     table = Table(
         *(
             Column(column, justify="center", style=color, vertical="middle")
             for column, color in zip(columns, colors)
         ),
         title=f"\n{title}",
-        min_width=len(title) + 2,
+        min_width=min_width,
+        caption=caption,
+        title_style="bold",
+        caption_style="grey74"
     )
     for row in values:
         table.add_row(*row)
@@ -86,3 +97,25 @@ def print_config_as_tree(title: str, config: Union[DictConfig, ListConfig]):
         )
 
     Console().print(root)
+
+
+class RichFormatter(HelpFormatter):
+    ...
+
+
+class RichArgumentParser(ArgumentParser):
+    def __init__(
+        self,
+        *args,
+        formatter_class: Type[HelpFormatter] = RichFormatter,
+        console_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.console_kwargs = console_kwargs or {}
+
+    def _print_message(
+        self, message: Any, file: Optional[IO[str]] = None
+    ) -> None:
+        console = Console(**{**self.console_kwargs, "file": file})
+        console.print(message)
