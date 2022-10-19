@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from omegaconf import MISSING, DictConfig, ListConfig
+from omegaconf import MISSING, DictConfig, ListConfig, SI
 
 from .commandline import cli
 from .core import (
@@ -73,6 +73,7 @@ __all__ = [
     "nickname",
     "register",
     "resolve",
+    "SI",
     "Target",
     "to_dict",
     "to_json",
