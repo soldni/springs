@@ -433,6 +433,7 @@ class init(Generic[InitT, CallableT]):
                 param=v, type_=_find_child_type(cls_=_type_, attr_name=str(k))
             )
             for k, v in {**config_node, **kwargs}.items()
+            # we already extracted the target callable, so we don't need it
             if k != cls.TARGET
         }
 

@@ -22,7 +22,10 @@ class ParamSpec:
     def type(self) -> Type:
         if self.key is None:
             raise ValueError("Cannot get type of root node")
-        return OmegaConf.get_type(self.parent, str(self.key))
+        else:
+            # int actually work fine, but OmegaConf.get_type() is
+            # not correctly typed.
+            return OmegaConf.get_type(self.parent, self.key)  # type: ignore
 
     @cached_property
     def position(self) -> int:
