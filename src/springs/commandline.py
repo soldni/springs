@@ -241,7 +241,7 @@ def wrap_main_method(
                 "Resolvers use syntax ${resolver_name:'arg1','arg2'}. "
                 "For more information, visit https://omegaconf.readthedocs.io/"
                 "en/latest/custom_resolvers.html"
-            )
+            ),
         )
 
     if opts.nicknames:
@@ -255,8 +255,7 @@ def wrap_main_method(
                 "Nicknames are invoked via: "
                 "${sp.from_node:nickname,'path.to.key1=value1',...}. "
                 "\nOverride keys are optional (but quotes are required)."
-
-            )
+            ),
         )
 
     # Print default options if requested py the user

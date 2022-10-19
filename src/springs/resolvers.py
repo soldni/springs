@@ -1,9 +1,12 @@
+import re
+from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Sequence, TypeVar, Union
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.basecontainer import BaseContainer
+from pathvalidate import sanitize_filename
 from yaml.error import MarkedYAMLError
 
 from .core import edit_list, from_dataclass, from_options, unsafe_merge
@@ -11,7 +14,18 @@ from .nicknames import NicknameRegistry
 
 T = TypeVar("T")
 
-__all__ = ["fullpath", "timestamp", "from_node"]
+
+@dataclass
+class KwResolver:
+    """Simple dataclass to hold any keyword argument for a resolver.
+    Must be subclassed to add any options."""
+
+    @classmethod
+    def from_args(cls, *args):
+        parsed = {}
+        for field, arg in zip(fields(cls), args):
+            parsed[field.name] = field.type(arg)
+        return cls(**parsed)
 
 
 def register(
@@ -40,17 +54,50 @@ def fullpath(path: str) -> str:
 
 
 @register("sp.timestamp")
-def timestamp(fmt: Optional[str] = None) -> str:
+def timestamp(*args: Any) -> str:
     """Returns a timestamp in the format provided; if not provided, use
     year-month-day_hour-minute-second."""
 
-    fmt = fmt or "%Y-%m-%d_%H-%M-%S"
-    return datetime.now(tz=timezone.utc).strftime(fmt)
+    @dataclass
+    class TimestampKw(KwResolver):
+        fmt: str = "%Y-%m-%d_%H-%M-%S"
+
+    options = TimestampKw.from_args(*args)
+
+    return datetime.now(tz=timezone.utc).strftime(options.fmt)
+
+
+@register("sp.sanitize")
+def sanitize_path(filename: str, *args: Any) -> str:
+    """Sanitize a path by replacing all invalid characters with underscores"""
+
+    @dataclass
+    class SanitizeKw(KwResolver):
+        collapse: bool = True
+        max_len: int = 255
+        replacement_text: str = "_"
+
+    options = SanitizeKw.from_args(*args)
+
+    p = sanitize_filename(
+        filename=filename,
+        replacement_text=options.replacement_text,
+        max_len=options.max_len,
+    )
+
+    if options.collapse:
+        s = re.sub(
+            rf"{options.replacement_text}+", options.replacement_text, str(p)
+        )
+    else:
+        s = str(p)
+
+    return s
 
 
 @register("sp.from_node")
 def from_node(
-    node_or_nickname: Union[DictConfig, ListConfig, str], *values: str
+    node_or_nickname: Union[DictConfig, ListConfig, str], *args: str
 ) -> Union[DictConfig, ListConfig]:
     """Instantiates a node from another node of a nickname to a config.
 
@@ -93,18 +140,18 @@ def from_node(
             f"not {type(node_or_nickname)}"
         )
 
-    if not values:
+    if not args:
         # no replacement to do!
         return node
 
     try:
-        if not all(isinstance(v, str) for v in values):
+        if not all(isinstance(v, str) for v in args):
             raise TypeError
-        replace = from_options(values)
+        replace = from_options(args)
     except (MarkedYAMLError, TypeError) as e:
         raise ValueError(
             "sp.from_node overrides must be in the path.to.key=value format, "
-            f"not {' '.join(values)}"
+            f"not {' '.join(args)}"
         ) from e
 
     # do the merging

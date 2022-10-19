@@ -1,5 +1,5 @@
-from argparse import ArgumentParser, HelpFormatter
 import os
+from argparse import ArgumentParser, HelpFormatter
 from typing import IO, Any, Dict, Optional, Sequence, Type, Union
 
 from omegaconf import DictConfig, ListConfig
@@ -32,8 +32,8 @@ def print_table(
         colors = colors * (len(columns) // len(colors) + 1)
 
     min_width = min(
-        max(len(title), len(caption or '')) + 2,
-        os.get_terminal_size().columns - 2
+        max(len(title), len(caption or "")) + 2,
+        os.get_terminal_size().columns - 2,
     )
 
     table = Table(
@@ -45,7 +45,7 @@ def print_table(
         min_width=min_width,
         caption=caption,
         title_style="bold",
-        caption_style="grey74"
+        caption_style="grey74",
     )
     for row in values:
         table.add_row(*row)
