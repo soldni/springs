@@ -1,12 +1,20 @@
-import logging
-from logging import StreamHandler, Handler
+from logging import (
+    FileHandler,
+    Formatter,
+    Handler,
+    Logger,
+    StreamHandler,
+    basicConfig,
+    getLevelName,
+    getLogger,
+)
 from multiprocessing import current_process
 from pathlib import Path
 from typing import List, Optional, Union
 
-from .utils import SpringsConfig
-
 from rich.logging import RichHandler
+
+from .utils import SpringsConfig
 
 
 def configure_logging(
@@ -15,7 +23,7 @@ def configure_logging(
     make_dir_if_missing: bool = True,
     fmt: str = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
     datefmt: str = "%Y-%m-%d %H:%M:%S",
-    logging_level: Union[int, str] = logging.INFO,
+    logging_level: Union[int, str] = getLevelName("INFO"),
     force_root_reattach: bool = True,
     root_formatter_kwargs: Optional[dict] = None,
     stream_handler_kwargs: Optional[dict] = None,
@@ -26,21 +34,71 @@ def configure_logging(
     add_rich_traceback: bool = True,
     rich_traceback_kwargs: Optional[dict] = None,
     use_rich_handler: bool = True,
-) -> logging.Logger:
-    """A big function that speeds up configuration of logging"""
+) -> Logger:
+    """Configure logging and returns a logger of name `logger_name` or the root
+    logger if a name is not provided.
+
+    Args:
+        logger_name (Optional[str], optional): The name of the logger to
+            configure. If not provided, it returns the root logger.  Defaults
+            to None.
+        file_logging_path (Optional[Path], optional): The path to the file
+            where logs should be written. If not provided, no logs are not
+            written to a file.  Defaults to None.
+        make_dir_if_missing (bool, optional): If True, the directory where
+            the file logging path is located is created if it does not exist.
+            Defaults to True.
+        fmt (str, optional): The format of the log message. Defaults to
+            "[DATE-TIME][NAME][LEVEL] MESSAGE".
+        datefmt (str, optional): The format of the date in the log message.
+            Defaults to YEAR-MONTH-DAY HOUR-MINUTE-SECOND.
+        logging_level (Union[int, str], optional): The level of logs to
+            display. Defaults to logging.INFO.
+        force_root_reattach (bool, optional): If True, all loggers are
+            reattached to the new handlers. Defaults to True.
+        root_formatter_kwargs (Optional[dict], optional): The keyword
+            arguments to pass to the formatter for the root logger. Defaults
+            to no extra keyword arguments.
+        stream_handler_kwargs (Optional[dict], optional): The keyword
+            arguments to pass to the stream handler. Defaults to no extra
+            keyword arguments.
+        file_handler_kwargs (Optional[dict], optional): The keyword
+            arguments to pass to the file handler. Defaults to no extra
+            keyword arguments.
+        basic_config_kwargs (Optional[dict], optional): The keyword
+            arguments to pass to the basicConfig function. Defaults to no
+            extra keyword arguments.
+        additional_handlers (Optional[List[Handler]], optional): A list of
+            additional handlers to add to the logger. Defaults to no extra
+            handlers beside the stream handler.
+        skip_formatter_for_handlers (Optional[bool], optional): If True,
+            the formatter is not added to the additional handlers. Defaults to
+            False.
+        add_rich_traceback (bool, optional): If True, rich is used to print
+            tracebacks in case of exceptions. Defaults to True.
+        rich_traceback_kwargs (Optional[dict], optional): The keyword
+            arguments to pass to the function that adds rich traceback.
+            Defaults to no extra keyword arguments.
+        use_rich_handler (bool, optional): If True, the rich handler is as
+            stream handler. Defaults to True.
+    """
 
     if add_rich_traceback:
         from .rich_utils import install
+
         install(**(rich_traceback_kwargs or {}))
 
-    if isinstance(logging_level, str):
-        logging_level = getattr(logging, logging_level)
+    logging_level = getLevelName(logging_level)
 
     # we abide by the global debugging flag
-    logging_level = logging.DEBUG if SpringsConfig.DEBUG else logging_level
+    logging_level = (
+        getLevelName("DEBUG")
+        if SpringsConfig.DEBUG
+        else getLevelName(logging_level)
+    )
 
     # change how the formatter looks
-    root_formatter = logging.Formatter(
+    root_formatter = Formatter(
         fmt=fmt, datefmt=datefmt, **(root_formatter_kwargs or {})
     )
 
@@ -74,19 +132,19 @@ def configure_logging(
             f"_{current_process().name}"
             f"{file_logging_path.suffix}"
         )
-        root_file_handler = logging.FileHandler(
+        root_file_handler = FileHandler(
             filename=file_logging_path.parent / path_name,
-            **(file_handler_kwargs or {})
+            **(file_handler_kwargs or {}),
         )
         root_file_handler.setFormatter(root_formatter)
         handlers.append(root_file_handler)
 
     # add the handlers to the root logger, force reattaching other loggers
     kw = basic_config_kwargs or {}
-    logging.basicConfig(
+    basicConfig(
         level=logging_level,
         force=force_root_reattach,
         handlers=handlers,
         **kw,
     )
-    return logging.getLogger(logger_name)
+    return getLogger(logger_name)

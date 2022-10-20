@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from omegaconf import MISSING, DictConfig, ListConfig, SI
+from omegaconf import MISSING, SI, DictConfig, ListConfig
 
 from .commandline import cli
 from .core import (

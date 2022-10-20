@@ -4,9 +4,9 @@ from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from .flexyclasses import flexyclass
 from .initialize import Target
+from .logging import configure_logging
 from .nicknames import NicknameRegistry
 from .utils import SpringsConfig, SpringsWarnings
-from .logging import configure_logging
 
 T = TypeVar("T")
 
