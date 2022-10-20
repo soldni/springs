@@ -212,7 +212,8 @@ def merge_and_catch(c1: C, c2: Union[DictConfig, ListConfig]) -> C:
 
 
 def validate_leftover_args(args: Sequence[str]):
-    re_valid = regex.compile(r"[a-zA-Z_]+[a-zA-Z0-9_]*=.+")
+    var_pattern = r"[a-zA-Z_]+[a-zA-Z0-9_]*"
+    re_valid = regex.compile(rf"({var_pattern}\.?)*{var_pattern}=.+")
     for arg in args:
         if not re_valid.match(arg):
             raise ValueError(
