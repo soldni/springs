@@ -12,9 +12,22 @@ from .core import traverse
 from .utils import SpringsConfig
 
 
-def add_pretty_traceback():
+def add_pretty_traceback(**install_kwargs: Any) -> None:
+    if SpringsConfig.RICH_TRACEBACK_INSTALLED:
+        return
+
+    # override any default settings if provided
+    install_kwargs = {
+        **dict(show_locals=SpringsConfig.RICH_LOCALS),
+        **install_kwargs,
+    }
+
     # setup nice traceback through rich library
-    install(show_locals=SpringsConfig.RICH_LOCALS)
+    install(**install_kwargs)
+
+    # mark as installed; prevent double installation.
+    # this is a global setting.
+    SpringsConfig.RICH_TRACEBACK_INSTALLED = True
 
 
 def print_table(

@@ -17,6 +17,8 @@ from typing import (
 from omegaconf import MISSING, DictConfig
 from typing_extensions import Concatenate, ParamSpec
 
+from springs.utils import SpringsConfig
+
 from .core import (
     from_dataclass,
     from_file,
@@ -214,10 +216,7 @@ def wrap_main_method(
 
     # setup debug
     if opts.debug:
-        # relative import here not to mess things up
-        from .logging import configure_logging
-
-        configure_logging.debug()
+        SpringsConfig.toggle_debug(True)
 
     # We don't run the main program if the user
     # has requested to print the any of the config.

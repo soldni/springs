@@ -110,8 +110,17 @@ class SpringsConfig:
     RICH_LOCALS: bool = literal_eval(
         os.environ.get("SPRINGS_RICH_LOCALS", "False")
     )
+    RICH_TRACEBACK_INSTALLED: bool = False
+    DEBUG: bool = literal_eval(os.environ.get("SPRINGS_DEBUG", "False"))
 
-    def toggle_rich_locals(self, value: Optional[bool] = None):
-        if value is None:
-            value = not self.RICH_LOCALS
-        self.RICH_LOCALS = value
+    @classmethod
+    def toggle_rich_locals(cls, value: Optional[bool] = None) -> bool:
+        cls.RICH_LOCALS = (
+            (not cls.RICH_LOCALS) if (value is None) else bool(value)
+        )
+        return cls.RICH_LOCALS
+
+    @classmethod
+    def toggle_debug(cls, value: Optional[bool] = None) -> bool:
+        cls.DEBUG = (not cls.DEBUG) if (value is None) else bool(value)
+        return cls.DEBUG

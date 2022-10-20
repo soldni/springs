@@ -28,6 +28,7 @@ from .initialize import Target, init
 from .logging import configure_logging
 from .resolvers import all_resolvers, register
 from .shortcuts import (
+    debug_logger,
     fdict,
     flist,
     get_nickname,
@@ -48,6 +49,7 @@ __all__ = [
     "cli",
     "configure_logging",
     "dataclass",
+    "debug_logger",
     "DEFAULT",
     "DictConfig",
     "edit_list",

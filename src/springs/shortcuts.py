@@ -1,10 +1,12 @@
 from dataclasses import field
+from logging import Logger
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from .flexyclasses import flexyclass
 from .initialize import Target
 from .nicknames import NicknameRegistry
-from .utils import SpringsWarnings
+from .utils import SpringsConfig, SpringsWarnings
+from .logging import configure_logging
 
 T = TypeVar("T")
 
@@ -67,3 +69,9 @@ def flist(*args: Any) -> List[Any]:
         return [*args]
 
     return field(default_factory=_factory_fn)
+
+
+def debug_logger(*args: Any, **kwargs: Any) -> Logger:
+    """Shortcut for springs.utils.SpringsWarnings.debug"""
+    SpringsConfig.toggle_debug(True)
+    return configure_logging(*args, **kwargs)
