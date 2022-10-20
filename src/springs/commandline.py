@@ -14,7 +14,9 @@ from typing import (
     Union,
 )
 
-from omegaconf import MISSING, DictConfig
+import regex
+from omegaconf import MISSING, DictConfig, ListConfig
+from omegaconf.errors import ConfigKeyError, ValidationError
 from typing_extensions import Concatenate, ParamSpec
 
 from springs.utils import SpringsConfig
@@ -144,21 +146,14 @@ class CliFlags:
     def add_argparse(self, parser: RichArgumentParser) -> Sequence[Action]:
         return [flag.add_argparse(parser) for flag in self.flags]
 
-    @property
-    def usage(self) -> str:
-        """Print the usage string for the CLI flags."""
-        return " ".join(flag.usage for flag in self.flags)
-
     def make_cli(self, func: Callable, name: str) -> RichArgumentParser:
         """Sets up argument parser ahead of running the CLI. This includes
         creating a help message, and adding a series of flags."""
         # Program name and usage added here.
         ap = RichArgumentParser(
             description=f"Parser for configuration {name}",
-            usage=(
-                f"python3 {sys.argv[0]} {self.usage} "
-                "param1=value1 … paramN=valueN"
-            ),
+            entrypoint=sys.argv[0],
+            arguments="param1=value1 … paramN=valueN",
         )
         self.add_argparse(ap)
         return ap
@@ -194,11 +189,42 @@ def check_if_valid_main_args(func: Callable, args: Sequence[Any]):
         raise RuntimeError(msg)
 
 
+C = TypeVar("C", DictConfig, ListConfig)
+
+
+def merge_and_catch(c1: C, c2: Union[DictConfig, ListConfig]) -> C:
+    """Improves printing of errors when merging configs in cli."""
+    try:
+        return merge(c1, c2)
+    except Exception as e:
+        prefix = "Error when merging cli options and files with struct config:"
+
+        if isinstance(e, ConfigKeyError):
+            msg, *_ = e.args[0].split("\n")
+        elif isinstance(e, ValidationError):
+            msg, key, *_ = e.args[0].split("\n")
+            _, key = key.split("full_key: ", 1)
+            msg = f"{msg} for key '{key}'"
+        else:
+            msg = str(e.args)
+
+        raise type(e)(f"{prefix} {msg}!")
+
+
+def validate_leftover_args(args: Sequence[str]):
+    re_valid = regex.compile(r"[a-zA-Z_]+[a-zA-Z0-9_]*=.+")
+    for arg in args:
+        if not re_valid.match(arg):
+            raise ValueError(
+                f"'{arg}' is not an option and it does not match the pattern "
+                "'path.to.key=value' expected for a cli config override."
+            )
+
+
 def wrap_main_method(
     func: Callable[Concatenate[Any, MP], RT],
     name: str,
     config_node: DictConfig,
-    print_fn: Optional[Callable] = None,
     *args: MP.args,
     **kwargs: MP.kwargs,
 ) -> RT:
@@ -213,6 +239,10 @@ def wrap_main_method(
     # Get argument parser and arguments
     ap = CliFlags().make_cli(func=func, name=name)
     opts, leftover_args = ap.parse_known_args()
+
+    # Checks if the args are a match for the 'path.to.key=value′ pattern
+    # expected for configuration overrides.
+    validate_leftover_args(leftover_args)
 
     # setup debug
     if opts.debug:
@@ -274,8 +304,9 @@ def wrap_main_method(
         # print the configuration if requested by the user
         if opts.inputs:
             print_config_as_tree(
-                title=f"[blue]Input From File {config_file}[/blue]",
+                title=f"Input From File {config_file}",
                 config=file_config,
+                title_color="blue",
             )
 
         # merge the file config with the main config
@@ -287,7 +318,9 @@ def wrap_main_method(
     # print the configuration if requested by the user
     if opts.inputs:
         print_config_as_tree(
-            title="[red]Input From Command Line[/red]", config=cli_config
+            title="Input From Command Line",
+            config=cli_config,
+            title_color="red",
         )
 
     # merge the cli config with the main config, do it last
@@ -302,12 +335,14 @@ def wrap_main_method(
     # finally merge the accumulator config with the main config
     # using the safe merging function, which will resolve interpolations
     # and perform type checking.
-    parsed_config = merge(config_node, accumulator_config)
+    parsed_config = merge_and_catch(config_node, accumulator_config)
 
     # print it if requested
     if not (opts.quiet) or opts.parsed:
         print_config_as_tree(
-            title="[green]Parsed Config[/green]", config=parsed_config
+            title="Parsed Config",
+            config=parsed_config,
+            title_color="green",
         )
 
     if do_no_run:
@@ -321,7 +356,6 @@ def wrap_main_method(
 
 def cli(
     config_node_cls: Optional[Type[CT]] = None,
-    print_fn: Optional[Callable] = None,
 ) -> Callable[
     [
         # this is a main method that takes as first input a parsed config
@@ -360,8 +394,6 @@ def cli(
     Args:
         config_node_cls (Optional[type]): The class of the configuration
             node. If not provided, no type checking will be performed.
-        print_fn (Optional[Callable]): A function to use for printing.
-            If not provided, `print` will be used.
 
     Returns:
         Callable: A decorator that can be used to decorate a method.
@@ -390,7 +422,6 @@ def cli(
                 func,
                 name,
                 config_node,
-                print_fn,
                 *args,
                 **kwargs,
             )

@@ -1,10 +1,13 @@
 import os
-from argparse import ArgumentParser, HelpFormatter
-from typing import IO, Any, Dict, Optional, Sequence, Type, Union
+from argparse import SUPPRESS, ArgumentParser
+from typing import IO, Any, Dict, Optional, Sequence, Union
 
 from omegaconf import DictConfig, ListConfig
-from rich.console import Console
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.style import Style
 from rich.table import Column, Table
+from rich.text import Text
 from rich.traceback import install
 from rich.tree import Tree
 
@@ -69,11 +72,16 @@ def print_table(
     Console().print(table)
 
 
-def print_config_as_tree(title: str, config: Union[DictConfig, ListConfig]):
+def print_config_as_tree(
+    title: str,
+    config: Union[DictConfig, ListConfig],
+    title_color: str = "default",
+):
     def get_parent_path(path: str) -> str:
         return path.rsplit(".", 1)[0] if "." in path else ""
 
-    trees: Dict[str, Tree] = {"": (root := Tree(f"[bold]\n{title}[/bold]"))}
+    root = Tree(f"[{title_color}][bold]{title}[bold][/{title_color}]")
+    trees: Dict[str, Tree] = {"": root}
     nodes_order: Dict[str, Dict[str, int]] = {}
 
     all_nodes = sorted(
@@ -112,23 +120,109 @@ def print_config_as_tree(title: str, config: Union[DictConfig, ListConfig]):
             key=lambda child: nodes_order[label][str(child.label)]
         )
 
-    Console().print(root)
-
-
-class RichFormatter(HelpFormatter):
-    ...
+    panel = Panel(root, padding=0, border_style=Style(conceal=True))
+    Console().print(panel)
 
 
 class RichArgumentParser(ArgumentParser):
     def __init__(
         self,
         *args,
-        formatter_class: Type[HelpFormatter] = RichFormatter,
+        entrypoint: Optional[str] = None,
+        arguments: Optional[str] = None,
         console_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
+
+        self.entrypoint = entrypoint
+        self.arguments = arguments
+        self.formatted: Dict[str, Any] = {}
         self.console_kwargs = console_kwargs or {}
+
+    def format_usage(self):
+        if self.entrypoint is not None and self.arguments is not None:
+            flags = [
+                "{"
+                + "/".join(act.option_strings)
+                + "}"
+                + (f" {act.dest.upper()}" if act.nargs != 0 else "")
+                for act in self._actions
+            ]
+            usage = (
+                "[green]python[/green] "
+                + f"[magenta][bold]{self.entrypoint}[/bold][/magenta] "
+                + "[yellow]"
+                + " ".join(flags)
+                + "[/yellow]"
+                + f" {self.arguments}"
+            )
+        else:
+            usage = self.usage
+
+        if usage is not None:
+            return Panel(
+                usage,
+                title="[bold][cyan] Usage [cyan][/bold]",
+                title_align="center",
+            )
+
+    def format_help(self):
+        groups = []
+
+        if self.description:
+            description = Panel(
+                Text(f"{self.description}", justify="center"),
+                style=Style(bold=True),
+                border_style=Style(conceal=True),
+            )
+            groups.append(description)
+
+        if (usage := self.format_usage()) is not None:
+            groups.append(usage)
+
+        for ag in self._action_groups:
+            if len(ag._group_actions) == 0:
+                continue
+
+            table = Table(show_header=False, show_edge=False)
+            table.add_column(
+                "Option", style=Style(color="magenta"), justify="left"
+            )
+            table.add_column(
+                "Default", style=Style(color="yellow"), justify="center"
+            )
+            table.add_column(
+                "Description", style=Style(color="green"), justify="left"
+            )
+
+            for action in ag._group_actions:
+                if action.default == SUPPRESS or action.default is None:
+                    default = "N/A"
+                else:
+                    default = repr(action.default)
+
+                table.add_row(
+                    "/".join(action.option_strings),
+                    default,
+                    (action.help or "").capitalize(),
+                )
+
+            panel = Panel(
+                table,
+                title=(
+                    Text(
+                        ag.title.capitalize(),
+                        style=Style(bold=True, color="cyan"),
+                    )
+                    if ag.title
+                    else None
+                ),
+                title_align="center",
+            )
+            groups.append(panel)
+
+        return Group(*groups)
 
     def _print_message(
         self, message: Any, file: Optional[IO[str]] = None
