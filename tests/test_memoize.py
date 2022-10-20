@@ -1,10 +1,7 @@
 import unittest
 from tempfile import TemporaryDirectory
 
-from springs.logging import configure_logging
 from springs.memoize import memoize
-
-configure_logging(logging_level="DEBUG")
 
 
 class TestMemoize(unittest.TestCase):
