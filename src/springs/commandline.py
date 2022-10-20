@@ -132,7 +132,7 @@ class CliFlags:
     )
     nicknames: Flag = Flag(
         name="nicknames",
-        help="Print all registered nicknames in Springs",
+        help="Print all registered nicknames in Springs.",
         action="store_true",
     )
 

@@ -1,6 +1,6 @@
 import os
 from argparse import SUPPRESS, ArgumentParser
-from typing import IO, Any, Dict, Optional, Sequence, Union
+from typing import IO, Any, Dict, List, Optional, Sequence, Union
 
 from omegaconf import DictConfig, ListConfig
 from rich.console import Console, Group
@@ -142,13 +142,32 @@ class RichArgumentParser(ArgumentParser):
 
     def format_usage(self):
         if self.entrypoint is not None and self.arguments is not None:
-            flags = [
-                "{"
-                + "/".join(act.option_strings)
-                + "}"
-                + (f" {act.dest.upper()}" if act.nargs != 0 else "")
-                for act in self._actions
-            ]
+            flags: List[str] = []
+
+            for ag in self._action_groups:
+                for act in ag._group_actions:
+
+                    if isinstance(act.metavar, str):
+                        metavar = (act.metavar,)
+                    elif act.metavar is None:
+                        metavar = (act.dest.upper(),)
+                    else:
+                        metavar = act.metavar
+
+                    if isinstance(act.nargs, int):
+                        metavar = metavar * act.nargs
+                    elif act.nargs == "?":
+                        metavar = ("[" + metavar[0] + "]?",)
+                    elif len(metavar) == 1:
+                        metavar = metavar + ("...",)
+
+                    if act.dest == "config" or act.dest == "help":
+                        print(act)
+
+                    options = "/".join(act.option_strings)
+                    flag = "{" + options + "} " + ", ".join(metavar)
+                    flags.append(flag.strip())
+
             usage = (
                 "[green]python[/green] "
                 + f"[magenta][bold]{self.entrypoint}[/bold][/magenta] "
@@ -185,26 +204,44 @@ class RichArgumentParser(ArgumentParser):
             if len(ag._group_actions) == 0:
                 continue
 
-            table = Table(show_header=False, show_edge=False)
+            table = Table(
+                show_edge=False,
+                show_header=False,
+                border_style=Style(bold=False, conceal=True),
+            )
             table.add_column(
-                "Option", style=Style(color="magenta"), justify="left"
+                "Flag", style=Style(color="magenta"), justify="left"
             )
             table.add_column(
                 "Default", style=Style(color="yellow"), justify="center"
             )
             table.add_column(
+                "Action", style=Style(color="red"), justify="center"
+            )
+            table.add_column(
                 "Description", style=Style(color="green"), justify="left"
+            )
+            table.add_row(
+                *(f"[bold]{c.header}[/bold]" for c in table.columns),
             )
 
             for action in ag._group_actions:
                 if action.default == SUPPRESS or action.default is None:
-                    default = "N/A"
+                    default = "-"
                 else:
                     default = repr(action.default)
+
+                if action.nargs is None:
+                    nargs = type(action).__name__.strip("_")[0]
+                elif action.nargs == 0:
+                    nargs = "-"
+                else:
+                    nargs = str(action.nargs)
 
                 table.add_row(
                     "/".join(action.option_strings),
                     default,
+                    nargs,
                     (action.help or "").capitalize(),
                 )
 
@@ -222,7 +259,10 @@ class RichArgumentParser(ArgumentParser):
             )
             groups.append(panel)
 
-        return Group(*groups)
+        return Panel(
+            Group(*groups),
+            border_style=Style(conceal=True),
+        )
 
     def _print_message(
         self, message: Any, file: Optional[IO[str]] = None
