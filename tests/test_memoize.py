@@ -1,7 +1,7 @@
 import unittest
 from tempfile import TemporaryDirectory
 
-from springs.memoize import memoize
+from springs.memoizer import memoize
 
 
 class TestMemoize(unittest.TestCase):
