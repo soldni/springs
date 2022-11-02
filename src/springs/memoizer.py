@@ -95,7 +95,7 @@ def memoize(
 
             if cache_file.exists():
                 # cache hit!
-                LOGGER.debug(
+                LOGGER.info(
                     f"Loading {function_name}({arguments_representation}) "
                     f"from {full_cache_dir} with hash {h}."
                 )
@@ -104,7 +104,7 @@ def memoize(
             else:
                 # cache miss!
                 result = func(*args, **kwargs)
-                LOGGER.debug(
+                LOGGER.info(
                     f"Loading {function_name}({arguments_representation}) "
                     f"to {full_cache_dir} with hash {h}."
                 )
