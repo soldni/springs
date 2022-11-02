@@ -26,6 +26,7 @@ from .core import (
 from .flexyclasses import flexyclass
 from .initialize import Target, init
 from .logging import configure_logging
+from .memoize import memoize
 from .resolvers import all_resolvers, register
 from .shortcuts import (
     debug_logger,
@@ -70,6 +71,7 @@ __all__ = [
     "ListConfig",
     "make_flexy",
     "make_target",
+    "memoize",
     "merge",
     "MISSING",
     "nickname",

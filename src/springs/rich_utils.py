@@ -161,9 +161,6 @@ class RichArgumentParser(ArgumentParser):
                     elif len(metavar) == 1:
                         metavar = metavar + ("...",)
 
-                    if act.dest == "config" or act.dest == "help":
-                        print(act)
-
                     options = "/".join(act.option_strings)
                     flag = "{" + options + "} " + ", ".join(metavar)
                     flags.append(flag.strip())

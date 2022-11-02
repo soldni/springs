@@ -19,7 +19,7 @@ from omegaconf import MISSING, DictConfig, ListConfig
 from omegaconf.errors import ConfigKeyError, ValidationError
 from typing_extensions import Concatenate, ParamSpec
 
-from springs.utils import SpringsConfig
+from springs.logging import configure_logging
 
 from .core import (
     from_dataclass,
@@ -55,6 +55,7 @@ class Flag:
     nargs: Optional[Union[str, int]] = MISSING
     metavar: Optional[str] = MISSING
     usage_extras: Optional[str] = MISSING
+    choices: Optional[Sequence[Any]] = MISSING
 
     @property
     def short(self) -> str:
@@ -112,9 +113,18 @@ class CliFlags:
         help="Print the parsed configuration.",
         action="store_true",
     )
+    log_level: Flag = Flag(
+        name="log-level",
+        help=(
+            "Logging level to use for this program. Can be one of "
+            "CRITICAL, ERROR, WARNING, INFO, or DEBUG. Defaults to WARNING."
+        ),
+        default="WARNING",
+        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+    )
     debug: Flag = Flag(
         name="debug",
-        help="Enter debug mode by setting global logging to DEBUG.",
+        help="Enable debug mode; equivalent to --log-level DEBUG.",
         action="store_true",
     )
     quiet: Flag = Flag(
@@ -245,9 +255,8 @@ def wrap_main_method(
     # expected for configuration overrides.
     validate_leftover_args(leftover_args)
 
-    # setup debug
-    if opts.debug:
-        SpringsConfig.toggle_debug(True)
+    # setup logging level for the root logger
+    configure_logging(logging_level="DEBUG" if opts.debug else opts.log_level)
 
     # We don't run the main program if the user
     # has requested to print the any of the config.

@@ -23,7 +23,7 @@ def configure_logging(
     make_dir_if_missing: bool = True,
     fmt: str = "[%(asctime)s][%(name)s][%(levelname)s] %(message)s",
     datefmt: str = "%Y-%m-%d %H:%M:%S",
-    logging_level: Union[int, str] = getLevelName("INFO"),
+    logging_level: Union[int, str, None] = None,
     force_root_reattach: bool = True,
     root_formatter_kwargs: Optional[dict] = None,
     stream_handler_kwargs: Optional[dict] = None,
@@ -53,7 +53,7 @@ def configure_logging(
         datefmt (str, optional): The format of the date in the log message.
             Defaults to YEAR-MONTH-DAY HOUR-MINUTE-SECOND.
         logging_level (Union[int, str], optional): The level of logs to
-            display. Defaults to logging.INFO.
+            display. By default, it is set to the value of the root logger.
         force_root_reattach (bool, optional): If True, all loggers are
             reattached to the new handlers. Defaults to True.
         root_formatter_kwargs (Optional[dict], optional): The keyword
@@ -88,14 +88,10 @@ def configure_logging(
 
         install(**(rich_traceback_kwargs or {}))
 
-    logging_level = getLevelName(logging_level)
-
-    # we abide by the global debugging flag
-    logging_level = (
-        getLevelName("DEBUG")
-        if SpringsConfig.DEBUG
-        else getLevelName(logging_level)
-    )
+    if SpringsConfig.DEBUG:
+        logging_level = getLevelName("DEBUG")
+    elif logging_level is not None:
+        logging_level = getLevelName(logging_level)
 
     # change how the formatter looks
     root_formatter = Formatter(
