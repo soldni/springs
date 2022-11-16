@@ -1,3 +1,4 @@
+import re
 import sys
 from argparse import Action
 from dataclasses import dataclass, fields, is_dataclass
@@ -14,7 +15,6 @@ from typing import (
     Union,
 )
 
-import regex
 from omegaconf import MISSING, DictConfig, ListConfig
 from omegaconf.errors import ConfigKeyError, ValidationError
 from typing_extensions import Concatenate, ParamSpec
@@ -223,7 +223,7 @@ def merge_and_catch(c1: C, c2: Union[DictConfig, ListConfig]) -> C:
 
 def validate_leftover_args(args: Sequence[str]):
     var_pattern = r"[a-zA-Z_]+[a-zA-Z0-9_]*"
-    re_valid = regex.compile(rf"({var_pattern}\.?)*{var_pattern}=.+")
+    re_valid = re.compile(rf"({var_pattern}\.?)*{var_pattern}=.+")
     for arg in args:
         if not re_valid.match(arg):
             raise ValueError(
