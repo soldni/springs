@@ -94,8 +94,8 @@ def sanitize_path(filename: str, *args: Any) -> str:
         s = str(p)
 
     if options.remove_full_stop:
-        s = re.sub("^\.+", "", s)   # leading dots
-        s = re.sub("\.+$", "", s)   # trailing dots
+        s = re.sub(r"^\.+", "", s)   # leading dots
+        s = re.sub(r"\.+$", "", s)   # trailing dots
         s = re.sub(r"\.+", options. replacement_text, s)  # remaining dots
 
     return s
