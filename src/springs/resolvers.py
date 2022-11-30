@@ -76,6 +76,7 @@ def sanitize_path(filename: str, *args: Any) -> str:
         collapse: bool = True
         max_len: int = 255
         replacement_text: str = "_"
+        remove_full_stop: bool = True
 
     options = SanitizeKw.from_args(*args)
 
@@ -91,6 +92,11 @@ def sanitize_path(filename: str, *args: Any) -> str:
         )
     else:
         s = str(p)
+
+    if options.remove_full_stop:
+        s = re.sub("^\.+", "", s)   # leading dots
+        s = re.sub("\.+$", "", s)   # trailing dots
+        s = re.sub(r"\.+", options. replacement_text, s)  # remaining dots
 
     return s
 
