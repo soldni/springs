@@ -7,6 +7,7 @@ from typing import (
     Literal,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Type,
     TypeVar,
@@ -31,7 +32,12 @@ class NicknameRegistry:
     __registry__: Dict[str, RegistryValue] = {}
 
     @classmethod
-    def scan(cls, path: Union[str, Path], prefix: Optional[str] = None):
+    def scan(
+        cls,
+        path: Union[str, Path],
+        prefix: Optional[str] = None,
+        ok_ext: Optional[Union[Sequence[str], Set[str]]] = None,
+    ):
         """Scan a path for valid yaml or json configurations and
         add them to the registry.
 
@@ -41,9 +47,17 @@ class NicknameRegistry:
                 each configuration. For example, if the path is "test.yml" and
                 the prefix is "foo", the configuration will be added to the
                 registry as "foo/test". Defaults to None.
+            ok_ext (Optional[Sequence[str]], optional): List of
+                allowed extensions. If None, all extensions are allowed.
+                Defaults to None.
         """
 
         path = Path(path)
+        ok_ext = set(ok_ext or [])
+        if path.is_file() and ok_ext and path.suffix.lstrip(".") not in ok_ext:
+            # we skip this file
+            return
+
         if not path.exists():
             raise ValueError(f"Path {path} does not exist")
 
@@ -56,7 +70,7 @@ class NicknameRegistry:
                     continue
 
                 # recursively scan children
-                cls.scan(path=child, prefix=name)
+                cls.scan(path=child, prefix=name, ok_ext=ok_ext)
         else:
             try:
                 # try to load the file as a configuration

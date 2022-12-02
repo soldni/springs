@@ -1,7 +1,18 @@
 from dataclasses import field
 from logging import Logger
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from .flexyclasses import flexyclass
 from .initialize import Target
@@ -38,11 +49,15 @@ def nickname(name: str) -> Callable[[Type[T]], Type[T]]:
     return NicknameRegistry.add(name)
 
 
-def scan(path: Union[str, Path], prefix: Optional[str] = None):
+def scan(
+    path: Union[str, Path],
+    prefix: Optional[str] = None,
+    ok_ext: Optional[Union[Sequence[str], Set[str]]] = None,
+):
     """Scan a path for valid yaml or json configurations and
     add them to the registry. This is a shortcut for calling
     springs.nicknames.NicknameRegistry.scan"""
-    return NicknameRegistry.scan(path=path, prefix=prefix)
+    return NicknameRegistry.scan(path=path, prefix=prefix, ok_ext=ok_ext)
 
 
 def make_flexy(cls_: Any) -> Any:

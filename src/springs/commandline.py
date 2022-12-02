@@ -3,6 +3,7 @@ import sys
 from argparse import Action
 from dataclasses import dataclass, fields, is_dataclass
 from inspect import getfullargspec, isclass
+from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -19,8 +20,6 @@ from omegaconf import MISSING, DictConfig, ListConfig
 from omegaconf.errors import ConfigKeyError, ValidationError
 from typing_extensions import Concatenate, ParamSpec
 
-from springs.logging import configure_logging
-
 from .core import (
     from_dataclass,
     from_file,
@@ -30,6 +29,8 @@ from .core import (
     to_yaml,
     unsafe_merge,
 )
+from .logging import configure_logging
+from .nicknames import NicknameRegistry
 from .rich_utils import (
     RichArgumentParser,
     add_pretty_traceback,
@@ -94,10 +95,15 @@ class Flag:
 class CliFlags:
     config: Flag = Flag(
         name="config",
-        help="A path to a YAML file containing a configuration.",
+        help=(
+            "Either a path to a YAML file containing a configuration, or"
+            " a nickname for a configuration in the registry. "
+            "Multiple configurations can be specified, and they will be "
+            "merged in the order they are provided."
+        ),
         default=[],
         action="append",
-        metavar="/path/to/yaml",
+        metavar="/path/to/config.yaml",
     )
     options: Flag = Flag(
         name="options",
@@ -121,6 +127,7 @@ class CliFlags:
             "CRITICAL, ERROR, WARNING, INFO, or DEBUG. Defaults to WARNING."
         ),
         default="WARNING",
+        nargs=1,
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
     )
     debug: Flag = Flag(
@@ -150,6 +157,7 @@ class CliFlags:
         name="save",
         help="Save the configuration to a YAML file and exit.",
         default=None,
+        nargs=1,
         metavar="/path/to/destination.yaml",
     )
 
@@ -239,6 +247,28 @@ def validate_leftover_args(args: Sequence[str]):
             )
 
 
+def load_from_file_or_nickname(
+    config_path_or_nickname: Union[str, Path],
+) -> Union[DictConfig, ListConfig]:
+    if not isinstance(config_path_or_nickname, Path) and re.match(
+        r"^{.*}$", config_path_or_nickname
+    ):
+        # strip leading and trailing curly braces
+        config_path_or_nickname = config_path_or_nickname[1:-1]
+
+        # config file is to load from nicknames
+        loaded_config = NicknameRegistry.get(
+            name=config_path_or_nickname, raise_if_missing=True
+        )
+        if not isinstance(loaded_config, (DictConfig, ListConfig)):
+            loaded_config = from_dataclass(loaded_config)
+    else:
+        # config file is to load from file
+        loaded_config = from_file(config_path_or_nickname)
+
+    return loaded_config
+
+
 def wrap_main_method(
     func: Callable[Concatenate[Any, MP], RT],
     name: str,
@@ -292,8 +322,6 @@ def wrap_main_method(
         )
 
     if opts.nicknames:
-        from .nicknames import NicknameRegistry
-
         print_table(
             title="Registered Nicknames",
             columns=["Nickname", "Path"],
@@ -316,13 +344,13 @@ def wrap_main_method(
     # load options from one or more config files; if multiple config files
     # are provided, the latter ones can override the former ones.
     for config_file in opts.config:
-        # load the file
-        file_config = from_file(config_file)
+        # Load config file
+        file_config = load_from_file_or_nickname(config_file)
 
         # print the configuration if requested by the user
         if opts.inputs:
             print_config_as_tree(
-                title=f"Input From File {config_file}",
+                title=f"Input From File {file_config}",
                 config=file_config,
                 title_color="blue",
             )
