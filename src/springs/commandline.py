@@ -27,6 +27,7 @@ from .core import (
     from_none,
     from_options,
     merge,
+    to_yaml,
     unsafe_merge,
 )
 from .rich_utils import (
@@ -124,7 +125,7 @@ class CliFlags:
     )
     debug: Flag = Flag(
         name="debug",
-        help="Enable debug mode; equivalent to --log-level DEBUG.",
+        help="Enable debug mode; equivalent to '--log-level DEBUG'.",
         action="store_true",
     )
     quiet: Flag = Flag(
@@ -144,6 +145,12 @@ class CliFlags:
         name="nicknames",
         help="Print all registered nicknames in Springs.",
         action="store_true",
+    )
+    save: Flag = Flag(
+        name="save",
+        help="Save the configuration to a YAML file and exit.",
+        default=None,
+        metavar="/path/to/destination.yaml",
     )
 
     @property
@@ -266,6 +273,7 @@ def wrap_main_method(
         or opts.parsed
         or opts.resolvers
         or opts.nicknames
+        or opts.save
     )
 
     if opts.resolvers:
@@ -292,7 +300,7 @@ def wrap_main_method(
             values=NicknameRegistry().all(),
             caption=(
                 "Nicknames are invoked via: "
-                "${sp.from_node:nickname,'path.to.key1=value1',...}. "
+                "${sp.ref:nickname,'path.to.key1=value1',...}. "
                 "\nOverride keys are optional (but quotes are required)."
             ),
         )
@@ -354,6 +362,11 @@ def wrap_main_method(
             config=parsed_config,
             title_color="green",
         )
+
+    if opts.save is not None:
+        # save the parsed config to a file
+        with open(opts.save, "w") as f:
+            f.write(to_yaml(parsed_config))
 
     if do_no_run:
         # we are not running because the user has requested to print

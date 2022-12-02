@@ -1,8 +1,11 @@
 from dataclasses import is_dataclass
+from pathlib import Path
 from typing import (
+    Any,
     Callable,
     Dict,
     Literal,
+    Optional,
     Sequence,
     Tuple,
     Type,
@@ -11,43 +14,97 @@ from typing import (
     overload,
 )
 
+from omegaconf import DictConfig, ListConfig
+
+from .core import from_file
+from .logging import configure_logging
+
+RegistryValue = Union[Type[Any], DictConfig, ListConfig]
+
 T = TypeVar("T")
+M = TypeVar("M", bound=RegistryValue)
+
+LOGGER = configure_logging(__name__)
 
 
 class NicknameRegistry:
-    __registry__: Dict[str, Type] = {}
+    __registry__: Dict[str, RegistryValue] = {}
+
+    @classmethod
+    def scan(cls, path: Union[str, Path], prefix: Optional[str] = None):
+        """Scan a path for valid yaml or json configurations and
+        add them to the registry.
+
+        Args:
+            path (Union[str, Path]): Path to scan.
+            prefix (Optional[str], optional): Prefix to add to the name of
+                each configuration. For example, if the path is "test.yml" and
+                the prefix is "foo", the configuration will be added to the
+                registry as "foo/test". Defaults to None.
+        """
+
+        path = Path(path)
+        if not path.exists():
+            raise ValueError(f"Path {path} does not exist")
+
+        name = f"{prefix}/{path.stem}" if prefix else path.name
+
+        if path.is_dir():
+            # iterate over all non-hidden files and directories
+            for child in path.iterdir():
+                if child.name.startswith("."):
+                    continue
+
+                # recursively scan children
+                cls.scan(path=child, prefix=name)
+        else:
+            try:
+                # try to load the file as a configuration
+                # and adding it to the registry
+                config = from_file(path)
+                cls._add(name, config)
+
+            except ValueError:
+                LOGGER.warning(f"Could not load config from {path}")
+
+    @classmethod
+    def _add(cls, name: str, config: M) -> M:
+        cls.__registry__[name] = config
+        return config
 
     @classmethod
     def add(cls, name: str) -> Callable[[Type[T]], Type[T]]:
-        """Save a configuration with a nickname for easy reuse."""
+        """Decorator to save a structured configuration with a nickname
+        for easy reuse."""
 
-        def add_to_registry(fn: Type[T]) -> Type[T]:
-            if not is_dataclass(fn):
-                raise ValueError(f"{fn} must be a dataclass")
+        def add_to_registry(cls_: Type[T]) -> Type[T]:
+            if not is_dataclass(cls_):
+                raise ValueError(f"{cls_} must be a dataclass")
 
             if name in cls.__registry__:
                 raise ValueError(f"{name} is already registered")
-            cls.__registry__[name] = fn
-            return fn
+            return cls._add(name, cls_)
 
         return add_to_registry
 
     @overload
     @classmethod
-    def get(cls, name: str, raise_if_missing: Literal[True] = True) -> Type:
+    def get(
+        cls, name: str, raise_if_missing: Literal[True] = True
+    ) -> RegistryValue:
         ...
 
     @overload
     @classmethod
     def get(
         cls, name: str, raise_if_missing: Literal[False] = False
-    ) -> Union[Type, None]:
+    ) -> Union[RegistryValue, None]:
         ...
 
     @classmethod
     def get(
         cls, name: str, raise_if_missing: Literal[True, False] = False
-    ) -> Union[Type, None]:
+    ) -> Union[RegistryValue, None]:
         if raise_if_missing and name not in cls.__registry__:
             raise ValueError(f"{name} is not registered as a nickname")
         return cls.__registry__.get(name, None)
@@ -55,6 +112,11 @@ class NicknameRegistry:
     @classmethod
     def all(cls) -> Sequence[Tuple[str, str]]:
         return [
-            (name, str(config.__name__))
+            (
+                name,
+                str(config.__name__)
+                if is_dataclass(config)
+                else type(config).__name__,
+            )
             for name, config in cls.__registry__.items()
         ]

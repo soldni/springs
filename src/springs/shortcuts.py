@@ -1,17 +1,20 @@
 from dataclasses import field
 from logging import Logger
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union
 
 from .flexyclasses import flexyclass
 from .initialize import Target
 from .logging import configure_logging
-from .nicknames import NicknameRegistry
+from .nicknames import NicknameRegistry, RegistryValue
 from .utils import SpringsConfig, SpringsWarnings
 
 T = TypeVar("T")
 
 
-def get_nickname(name: str, raise_if_missing: bool = False) -> Optional[Type]:
+def get_nickname(
+    name: str, raise_if_missing: bool = False
+) -> Optional[RegistryValue]:
     """Shortcut for springs.nicknames.NicknameRegistry.get"""
     # slightly clunky but annoyingly doesn't work with typing
     if raise_if_missing:
@@ -22,7 +25,7 @@ def get_nickname(name: str, raise_if_missing: bool = False) -> Optional[Type]:
 
 def toggle_warnings(value: Optional[bool] = None):
     """Shortcut for springs.utils.SpringsWarnings.toggle"""
-    SpringsWarnings.toggle(value)
+    return SpringsWarnings.toggle(value)
 
 
 def make_target(c: Callable) -> str:
@@ -33,6 +36,13 @@ def make_target(c: Callable) -> str:
 def nickname(name: str) -> Callable[[Type[T]], Type[T]]:
     """Shortcut for springs.nicknames.NicknameRegistry.add"""
     return NicknameRegistry.add(name)
+
+
+def scan(path: Union[str, Path], prefix: Optional[str] = None):
+    """Scan a path for valid yaml or json configurations and
+    add them to the registry. This is a shortcut for calling
+    springs.nicknames.NicknameRegistry.scan"""
+    return NicknameRegistry.scan(path=path, prefix=prefix)
 
 
 def make_flexy(cls_: Any) -> Any:

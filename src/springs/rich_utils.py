@@ -239,7 +239,7 @@ class RichArgumentParser(ArgumentParser):
                     "/".join(action.option_strings),
                     default,
                     nargs,
-                    (action.help or "").capitalize(),
+                    (action.help or ""),
                 )
 
             panel = Panel(

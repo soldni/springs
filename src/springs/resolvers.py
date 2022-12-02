@@ -11,6 +11,7 @@ from yaml.error import MarkedYAMLError
 
 from .core import edit_list, from_dataclass, from_options, unsafe_merge
 from .nicknames import NicknameRegistry
+from .utils import SpringsWarnings
 
 T = TypeVar("T")
 
@@ -94,15 +95,24 @@ def sanitize_path(filename: str, *args: Any) -> str:
         s = str(p)
 
     if options.remove_full_stop:
-        s = re.sub(r"^\.+", "", s)   # leading dots
-        s = re.sub(r"\.+$", "", s)   # trailing dots
-        s = re.sub(r"\.+", options. replacement_text, s)  # remaining dots
+        s = re.sub(r"^\.+", "", s)  # leading dots
+        s = re.sub(r"\.+$", "", s)  # trailing dots
+        s = re.sub(r"\.+", options.replacement_text, s)  # remaining dots
 
     return s
 
 
 @register("sp.from_node")
 def from_node(
+    node_or_nickname: Union[str, DictConfig, ListConfig], *args: str
+):
+    """Deprecate this resolver in favor of sp.ref"""
+    SpringsWarnings.deprecated(deprecated="sp.from_node", replacement="sp.ref")
+    return ref(node_or_nickname, *args)
+
+
+@register("sp.ref")
+def ref(
     node_or_nickname: Union[DictConfig, ListConfig, str], *args: str
 ) -> Union[DictConfig, ListConfig]:
     """Instantiates a node from another node of a nickname to a config.
@@ -118,7 +128,7 @@ def from_node(
             'name': 'train',
             'bs': 32
         },
-            'test': '${sp.from_node: ${train}, "name=test", "data.path=/test"}'
+            'test': '${sp.ref: ${train}, "name=test", "data.path=/test"}'
     })
     print(sp.to_dict(sp.validate(cfg)))
 
@@ -156,7 +166,7 @@ def from_node(
         replace = from_options(args)
     except (MarkedYAMLError, TypeError) as e:
         raise ValueError(
-            "sp.from_node overrides must be in the path.to.key=value format, "
+            "sp.ref overrides must be in the path.to.key=value format, "
             f"not {' '.join(args)}"
         ) from e
 

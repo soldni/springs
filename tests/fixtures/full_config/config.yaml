@@ -76,20 +76,20 @@ data:
         split: train
       # mappers: "${data.train_splits_config[0].mappers}"
       mappers: "${
-        sp.from_node:
+        sp.ref:
         ${data.train_splits_config[0].mappers},
         '[7].strategy=all'
         }"
 
   valid_splits_config:
     - "${
-      sp.from_node:
+      sp.ref:
       ${data.train_splits_config[0]},
       'loader.split=test'
       }"
   # test_splits_config:
   #   - "${
-  #     sp.from_node:
+  #     sp.ref:
   #     ${data.train_splits_config[0]},
   #     'loader.split=test'
   #     }"

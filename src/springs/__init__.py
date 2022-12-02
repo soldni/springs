@@ -36,10 +36,11 @@ from .shortcuts import (
     make_flexy,
     make_target,
     nickname,
+    scan,
     toggle_warnings,
 )
 from .traversal import traverse
-from .types import get_type
+from .types_utils import get_type
 from .utils import get_version
 
 __version__ = get_version()
@@ -78,6 +79,7 @@ __all__ = [
     "register",
     "resolve",
     "SI",
+    "scan",
     "Target",
     "to_dict",
     "to_json",
