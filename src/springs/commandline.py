@@ -96,10 +96,10 @@ class CliFlags:
     config: Flag = Flag(
         name="config",
         help=(
-            "Either a path to a YAML file containing a configuration, or"
-            " a nickname for a configuration in the registry. "
-            "Multiple configurations can be specified, and they will be "
-            "merged in the order they are provided."
+            "Either a path to a YAML file containing a configuration, or "
+            "a nickname for a configuration in the registry. "
+            "Multiple configurations can be specified with additional -c "
+            "flags, and they will be merged in the order they are provided."
         ),
         default=[],
         action="append",

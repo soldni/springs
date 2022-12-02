@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
+from dataclasses import dataclass
 
 import springs as sp
 
@@ -19,7 +20,7 @@ class LoaderConfig:
 
 
 @sp.flexyclass
-@sp.dataclass
+@dataclass
 class HuggingFaceModuleConfig:
     _target_: str = sp.MISSING
     pretrained_model_name_or_path: str = "${backbone}"

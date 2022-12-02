@@ -108,9 +108,8 @@ def print_config_as_tree(
         if tree is None:
             raise ValueError("Cannot print disjoined tree")
 
-        label = (
-            f"[bold]{spec.key}[/bold] ({spec.type.__name__}) = {spec.value}"
-        )
+        type_name = spec.type.__name__ if spec.type else "???"
+        label = f"[bold]{spec.key}[/bold] ({type_name}) = {spec.value}"
         tree.add(label=label)
         nodes_order.setdefault(parent_path, {})[label] = spec.position
 
