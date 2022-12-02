@@ -1,7 +1,8 @@
 from pathlib import Path
-from .config import SseConfig
 
 import springs as sp
+
+from .config import SseConfig
 
 sp.scan(path=Path(__file__).parent, ok_ext=["yaml"])
 

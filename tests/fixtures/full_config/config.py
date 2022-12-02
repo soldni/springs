@@ -1,5 +1,5 @@
-from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
 
 import springs as sp
 
