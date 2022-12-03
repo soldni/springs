@@ -29,6 +29,7 @@ from .core import (
     to_yaml,
     unsafe_merge,
 )
+from .flexyclasses import is_flexyclass
 from .logging import configure_logging
 from .nicknames import NicknameRegistry
 from .rich_utils import (
@@ -260,8 +261,17 @@ def load_from_file_or_nickname(
         loaded_config = NicknameRegistry.get(
             name=config_path_or_nickname, raise_if_missing=True
         )
-        if not isinstance(loaded_config, (DictConfig, ListConfig)):
+
+        if is_dataclass(loaded_config):
             loaded_config = from_dataclass(loaded_config)
+        elif is_flexyclass(loaded_config):
+            loaded_config = loaded_config.to_dict_config()  # type: ignore
+        elif not isinstance(loaded_config, (DictConfig, ListConfig)):
+            raise ValueError(
+                f"Nickname '{config_path_or_nickname}' is not a "
+                "DictConfig or ListConfig."
+            )
+
     else:
         # config file is to load from file
         loaded_config = from_file(config_path_or_nickname)

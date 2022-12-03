@@ -1,4 +1,5 @@
 from dataclasses import is_dataclass
+from inspect import isclass
 from pathlib import Path
 from typing import (
     Any,
@@ -12,15 +13,17 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 
 from omegaconf import DictConfig, ListConfig
 
 from .core import from_file
+from .flexyclasses import FlexyClass
 from .logging import configure_logging
 
-RegistryValue = Union[Type[Any], DictConfig, ListConfig]
+RegistryValue = Union[Type[Any], Type[FlexyClass], DictConfig, ListConfig]
 
 T = TypeVar("T")
 M = TypeVar("M", bound=RegistryValue)
@@ -92,12 +95,16 @@ class NicknameRegistry:
         for easy reuse."""
 
         def add_to_registry(cls_: Type[T]) -> Type[T]:
-            if not is_dataclass(cls_):
+            if not (
+                is_dataclass(cls_)
+                or isclass(cls_)
+                and issubclass(cls_, FlexyClass)
+            ):
                 raise ValueError(f"{cls_} must be a dataclass")
 
             if name in cls.__registry__:
                 raise ValueError(f"{name} is already registered")
-            return cls._add(name, cls_)
+            return cast(Type[T], cls._add(name, cls_))
 
         return add_to_registry
 

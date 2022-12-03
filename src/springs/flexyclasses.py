@@ -4,6 +4,7 @@ from dataclasses import Field, field, fields, is_dataclass
 from typing import Any, Dict, Generic, Type, TypeVar
 
 from omegaconf import MISSING as OC_MISSING
+from omegaconf import DictConfig
 from typing_extensions import dataclass_transform
 
 from .utils import get_annotations
@@ -62,6 +63,13 @@ class FlexyClass(dict, Generic[C]):
         return field(default_factory=lambda: factory_dict)
 
     @classmethod
+    def to_dict_config(cls, **kwargs: Any) -> DictConfig:
+        """Convert the FlexyClass to an OmegaConf DictConfig object"""
+        from .core import from_dict
+
+        return from_dict({**cls.defaults(), **kwargs})
+
+    @classmethod
     def flexyclass(cls, target_cls: Type[C]) -> Type["FlexyClass"]:
         """Decorator to create a FlexyClass from a class"""
 
@@ -89,3 +97,8 @@ class FlexyClass(dict, Generic[C]):
 def flexyclass(cls: Type[C]) -> Type[FlexyClass[C]]:
     """Alias for FlexyClass.flexyclass"""
     return FlexyClass.flexyclass(cls)
+
+
+def is_flexyclass(obj: Any) -> bool:
+    """Check if an object is a FlexyClass"""
+    return isinstance(obj, FlexyClass)
