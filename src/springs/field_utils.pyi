@@ -1,4 +1,5 @@
-from typing import Callable, Optional, TypeVar, overload
+from collections.abc import Callable
+from typing import TypeVar, overload
 
 from omegaconf.basecontainer import BaseContainer
 
@@ -10,7 +11,7 @@ _T = TypeVar("_T")
 def field(
     default: _T,
     *,
-    help: Optional[str] = ...,
+    help: str | None = ...,
     omegaconf_ignore: bool = ...,
     **kwargs
 ) -> _T: ...
@@ -18,11 +19,11 @@ def field(
 def field(
     default_factory: Callable[..., _T],
     *,
-    help: Optional[str] = ...,
+    help: str | None = ...,
     omegaconf_ignore: bool = ...,
     **kwargs
 ) -> _T: ...
 
 class HelpLookup:
     def __init__(self, node: BaseContainer) -> None: ...
-    def __getitem__(self, key: str) -> Optional[str]: ...
+    def __getitem__(self, key: str) -> str | None: ...

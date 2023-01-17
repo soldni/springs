@@ -18,4 +18,4 @@ per-file-ignores =
     # __init__.py files are allowed to have unused imports and lines-too-long
     */__init__.py:F401
     */**/**/__init__.py:F401,E501
-    *.pyi:E302,E305,Y022,Y037
+    *.pyi:E302,E305
