@@ -345,7 +345,12 @@ def wrap_main_method(
 
     # Print default options if requested py the user
     if opts.options:
-        print_config_as_tree(title="Default Options", config=config_node)
+        print_config_as_tree(
+            title="Default Options",
+            config=config_node,
+            title_color="green",
+            print_help=True,
+        )
 
     # This configuration is used to accumulate all options across
     # various config files and the CLI.
@@ -360,9 +365,10 @@ def wrap_main_method(
         # print the configuration if requested by the user
         if opts.inputs:
             print_config_as_tree(
-                title=f"Input From File {file_config}",
+                title=f"Input From File {config_file}",
                 config=file_config,
-                title_color="blue",
+                title_color="green",
+                print_help=False,
             )
 
         # merge the file config with the main config
@@ -376,7 +382,8 @@ def wrap_main_method(
         print_config_as_tree(
             title="Input From Command Line",
             config=cli_config,
-            title_color="red",
+            title_color="green",
+            print_help=False,
         )
 
     # merge the cli config with the main config, do it last
@@ -399,6 +406,7 @@ def wrap_main_method(
             title="Parsed Config",
             config=parsed_config,
             title_color="green",
+            print_help=False,
         )
 
     if opts.save is not None:

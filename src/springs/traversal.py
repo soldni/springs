@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterator, Optional, Type, Union
-from typing import cast as typecast
+from typing import cast as typing_cast
 
 from omegaconf import MISSING, DictConfig, ListConfig, OmegaConf
 from omegaconf.basecontainer import BaseContainer
+
+from .field_utils import HelpLookup
 
 
 @dataclass
@@ -14,6 +16,7 @@ class ParamSpec:
     value: Any
     parent: Optional[Union[DictConfig, ListConfig]]
     interpol: bool
+    help: Optional[str]
 
     def is_node(self) -> bool:
         return isinstance(self.value, (DictConfig, ListConfig))
@@ -52,9 +55,19 @@ def traverse(
     recurse: bool = True,
 ) -> Iterator[ParamSpec]:
 
+    help = HelpLookup(node)
+
     if include_root:
         yield ParamSpec(
-            key=None, path="", value=node, parent=None, interpol=False
+            key=None,
+            path="",
+            value=node,
+            parent=None,
+            interpol=False,
+            # help only exists as defined by the parent,
+            # so we set it null here (parent class will set it if
+            # it exists.)
+            help=None,
         )
 
     if isinstance(node, ListConfig):
@@ -62,11 +75,11 @@ def traverse(
             if is_interpolation := OmegaConf.is_interpolation(node, key):
                 # we don't want to resolve interpolations for now
                 # as they might not be resolvable at the moment
-                value = typecast(list, OmegaConf.to_container(node))[
-                    typecast(int, key)
+                value = typing_cast(list, OmegaConf.to_container(node))[
+                    typing_cast(int, key)
                 ]
             else:
-                value = node[typecast(int, key)]
+                value = node[typing_cast(int, key)]
 
             if isinstance(value, BaseContainer):
                 # we recurse into the node if it is a container
@@ -82,6 +95,7 @@ def traverse(
                             value=spec.value,
                             parent=spec.parent,
                             interpol=is_interpolation,
+                            help=spec.help,
                         )
 
             current_node_spec = ParamSpec(
@@ -91,6 +105,10 @@ def traverse(
                 value=value,
                 parent=node,
                 interpol=is_interpolation,
+                # help only exists as defined by the parent,
+                # so we set it null here (parent class will set it if
+                # it exists.)
+                help=None,
             )
 
             # we yield the node if it is not a container, or if
@@ -130,6 +148,7 @@ def traverse(
                             value=spec.value,
                             parent=spec.parent,
                             interpol=is_interpolation,
+                            help=spec.help,
                         )
 
             current_node_spec = ParamSpec(
@@ -138,6 +157,7 @@ def traverse(
                 value=value,
                 parent=node,
                 interpol=is_interpolation,
+                help=help[str(key)],
             )
 
             # we yield the node if it is not a container, or if
