@@ -277,12 +277,14 @@ class ModelConfig:
         help='The name of the model to use'
     )
     num_classes: int = sp.field(
+        default=2,
         help='The number of classes for classification'
     )
 
 @sp.dataclass
 class ExperimentConfig:
     model: ModelConfig = sp.field(
+        default_factory=ModelConfig,
         help='The model configuration'
     )
 
