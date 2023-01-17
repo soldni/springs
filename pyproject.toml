@@ -1,6 +1,6 @@
 [project]
 name = "springs"
-version = "1.10.3"
+version = "1.11.0"
 description = """\
     A set of utilities to create and manage typed configuration files \
     effectively, built on top of OmegaConf.\

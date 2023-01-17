@@ -33,11 +33,12 @@ from .flexyclasses import is_flexyclass
 from .logging import configure_logging
 from .nicknames import NicknameRegistry
 from .rich_utils import (
+    ConfigTreeParser,
     RichArgumentParser,
+    TableParser,
     add_pretty_traceback,
-    print_config_as_tree,
-    print_table,
 )
+from .types_utils import get_type
 
 # parameters for the main function
 MP = ParamSpec("MP")
@@ -305,6 +306,10 @@ def wrap_main_method(
     # setup logging level for the root logger
     configure_logging(logging_level="DEBUG" if opts.debug else opts.log_level)
 
+    # set up parsers for the various config nodes and tables
+    tree_parser = ConfigTreeParser()
+    table_parser = TableParser()
+
     # We don't run the main program if the user
     # has requested to print the any of the config.
     do_no_run = (
@@ -320,7 +325,7 @@ def wrap_main_method(
         # relative import here not to mess things up
         from .resolvers import all_resolvers
 
-        print_table(
+        table_parser(
             title="Registered Resolvers",
             columns=["Resolver Name"],
             values=[(r,) for r in sorted(all_resolvers())],
@@ -329,10 +334,11 @@ def wrap_main_method(
                 "For more information, visit https://omegaconf.readthedocs.io/"
                 "en/latest/custom_resolvers.html"
             ),
+            borders=True,
         )
 
     if opts.nicknames:
-        print_table(
+        table_parser(
             title="Registered Nicknames",
             columns=["Nickname", "Path"],
             values=NicknameRegistry().all(),
@@ -341,14 +347,16 @@ def wrap_main_method(
                 "${sp.ref:nickname,'path.to.key1=value1',...}. "
                 "\nOverride keys are optional (but quotes are required)."
             ),
+            borders=True,
         )
 
     # Print default options if requested py the user
     if opts.options:
-        print_config_as_tree(
+        config_name = getattr(get_type(config_node), "__name__", None)
+        tree_parser(
             title="Default Options",
+            subtitle=f"(class: '{config_name}')" if config_name else None,
             config=config_node,
-            title_color="green",
             print_help=True,
         )
 
@@ -364,10 +372,10 @@ def wrap_main_method(
 
         # print the configuration if requested by the user
         if opts.inputs:
-            print_config_as_tree(
-                title=f"Input From File {config_file}",
+            tree_parser(
+                title="Input From File",
+                subtitle=f"(path: '{config_file}')",
                 config=file_config,
-                title_color="green",
                 print_help=False,
             )
 
@@ -379,10 +387,9 @@ def wrap_main_method(
 
     # print the configuration if requested by the user
     if opts.inputs:
-        print_config_as_tree(
+        tree_parser(
             title="Input From Command Line",
             config=cli_config,
-            title_color="green",
             print_help=False,
         )
 
@@ -402,10 +409,9 @@ def wrap_main_method(
 
     # print it if requested
     if not (opts.quiet) or opts.parsed:
-        print_config_as_tree(
+        tree_parser(
             title="Parsed Config",
             config=parsed_config,
-            title_color="green",
             print_help=False,
         )
 
