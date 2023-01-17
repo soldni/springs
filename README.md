@@ -304,17 +304,17 @@ You can print all command line options by calling `python my_script.py -h` or `p
 
 |Flag | Default | Action | Description|
 |----:|:-------:|:------:|:-----------|
-|`-h/--help` | `False` | toggle | show this help message and exit|
-|`-c/--config` | `[]` | append | Either a path to a YAML file containing a configuration, or a nickname for a configuration in the registry. Multiple configurations can be specified with additional -c flags, and they will be merged in the order they are provided.|
-|`-o/--options` | `False` | toggle | Print all default options and CLI flags.|
-|`-i/--inputs` | `False` | toggle | Print the input configuration.|
-|`-p/--parsed` | `False` | toggle | Print the parsed configuration.|
-|`-l/--log-level` | `WARNING` | set | Logging level to use for this program. Can be one of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`. Defaults to `WARNING`.|
-|`-d/--debug` | `False` |toggle| Enable debug mode; equivalent to `--log-level DEBUG`.|
-|`-q/--quiet` | `False` |toggle| If provided, it does not print the configuration when running.|
-|`-r/--resolvers` | `False` |toggle| Print all registered resolvers in OmegaConf, Springs, and current codebase.|
-|`-n/--nicknames` | `False` |toggle| Print all registered nicknames in Springs.|
-|`-s/--save` | `None` | set | Save the configuration to a YAML file and exit.|
+|`-h/--help` | `False` | toggle | show the help message and exit|
+|`-c/--config` | `[]` | append | either a path to a YAML file containing a configuration, or a nickname for a configuration in the registry; multiple configurations can be specified with additional `-c/--config` flags, and they will be merged in the order they are provided|
+|`-o/--options` | `False` | toggle | print all default options and CLI flags|
+|`-i/--inputs` | `False` | toggle | print the input configuration|
+|`-p/--parsed` | `False` | toggle | print the parsed configuration|
+|`-l/--log-level` | `WARNING` | set | logging level to use for this program; can be one of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`; defaults to `WARNING`.|
+|`-d/--debug` | `False` |toggle| enable debug mode; equivalent to `--log-level DEBUG`|
+|`-q/--quiet` | `False` |toggle| if provided, it does not print the configuration when running|
+|`-r/--resolvers` | `False` |toggle| print all registered resolvers in OmegaConf, Springs, and current codebase|
+|`-n/--nicknames` | `False` |toggle| print all registered nicknames in Springs|
+|`-s/--save` | `None` | set | save the configuration to a YAML file and exit|
 
 ## Tips and Tricks
 

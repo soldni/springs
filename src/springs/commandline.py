@@ -99,8 +99,8 @@ class CliFlags:
         name="config",
         help=(
             "either a path to a YAML file containing a configuration, or "
-            "a nickname for a configuration in the registry; "
-            "multiple configurations can be specified with additional '-c' "
+            "a nickname for a configuration in the registry; multiple "
+            "configurations can be specified with additional '-c/--config' "
             "flags, and they will be merged in the order they are provided"
         ),
         default=[],
