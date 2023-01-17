@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from omegaconf import MISSING, SI, DictConfig, ListConfig
 
@@ -23,6 +23,7 @@ from .core import (
     unsafe_merge,
     validate,
 )
+from .field_utils import field
 from .flexyclasses import flexyclass
 from .initialize import Target, init
 from .logging import configure_logging
@@ -32,6 +33,8 @@ from .shortcuts import (
     debug_logger,
     fdict,
     flist,
+    fobj,
+    fval,
     get_nickname,
     make_flexy,
     make_target,
@@ -46,6 +49,7 @@ from .utils import get_version
 __version__ = get_version()
 
 __all__ = [
+    "add_help",
     "all_resolvers",
     "cast",
     "cli",
@@ -59,6 +63,8 @@ __all__ = [
     "field",
     "flexyclass",
     "flist",
+    "fobj",
+    "fval",
     "from_dataclass",
     "from_dict",
     "from_file",

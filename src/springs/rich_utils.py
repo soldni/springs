@@ -1,4 +1,5 @@
 import os
+import re
 from argparse import SUPPRESS, ArgumentParser
 from typing import IO, Any, Dict, List, Optional, Sequence, Union
 
@@ -76,11 +77,12 @@ def print_config_as_tree(
     title: str,
     config: Union[DictConfig, ListConfig],
     title_color: str = "default",
+    print_help: bool = False,
 ):
     def get_parent_path(path: str) -> str:
         return path.rsplit(".", 1)[0] if "." in path else ""
 
-    root = Tree(f"[{title_color}][bold]{title}[bold][/{title_color}]")
+    root = Tree(f"[{title_color}][bold]{title}[/bold][/{title_color}]")
     trees: Dict[str, Tree] = {"": root}
     nodes_order: Dict[str, Dict[str, int]] = {}
 
@@ -88,16 +90,21 @@ def print_config_as_tree(
         traverse(config, include_nodes=True, include_leaves=False),
         key=lambda spec: spec.path.count("."),
     )
+
     for spec in all_nodes:
         parent_path = get_parent_path(spec.path)
         tree = trees.get(parent_path, None)
         if spec.key is None or tree is None:
             raise ValueError("Cannot print disjoined tree")
 
-        label = "[bold {color}]{repr}[/bold {color}]".format(
-            color="magenta" if isinstance(spec.value, DictConfig) else "cyan",
-            repr=spec.key if isinstance(spec.key, str) else f"[{spec.key}]",
-        )
+        l_color = "magenta" if isinstance(spec.value, DictConfig) else "cyan"
+        l_text = spec.key if isinstance(spec.key, str) else f"[{spec.key}]"
+        label = f"[bold {l_color}]{l_text}[/bold {l_color}]"
+
+        if spec.help and print_help:
+            l_help = re.sub(r"\s+", " ", spec.help.strip())
+            label = f"{label}\n[{l_color} italic]({l_help})[/italic {l_color}]"
+
         subtree = tree.add(label=label)
         trees[spec.path] = subtree
         nodes_order.setdefault(parent_path, {})[label] = spec.position
@@ -110,6 +117,11 @@ def print_config_as_tree(
 
         type_name = spec.type.__name__ if spec.type else "???"
         label = f"[bold]{spec.key}[/bold] ({type_name}) = {spec.value}"
+        if spec.help and print_help:
+            l_help = re.sub(r"\s+", " ", spec.help.strip())
+            l_color = "grey74"
+            label = f"{label}\n[{l_color} italic]({l_help})[/italic {l_color}]"
+
         tree.add(label=label)
         nodes_order.setdefault(parent_path, {})[label] = spec.position
 
@@ -117,6 +129,13 @@ def print_config_as_tree(
         # sort nodes in each tree to match the order the appear in the config
         tree.children.sort(
             key=lambda child: nodes_order[label][str(child.label)]
+        )
+
+    if len(all_nodes) == 0:
+        # if there are no nodes, add a placeholder to indicate that
+        # the config is empty
+        root = Tree(
+            f"{root.label}\n  [italic][grey74](empty)[/grey74][/italic]"
         )
 
     panel = Panel(root, padding=0, border_style=Style(conceal=True))

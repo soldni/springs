@@ -134,16 +134,18 @@ class TrainerConfig:
 @sp.dataclass
 class SseConfig:
     # base strings to control where models and tokenizers come from
-    backbone: Optional[str] = None
+    backbone: Optional[str] = sp.fobj(
+        None, help="name of the transformers model to use"
+    )
     checkpoint: Optional[str] = None
 
     # this controls training environment and data
     env: EnvironmentConfig = EnvironmentConfig()
-    data: DataConfig = DataConfig()
+    data: DataConfig = sp.fobj(DataConfig(), help="Data configuration")
     model: ModelConfig = ModelConfig()
     loggers: LoggersConfig = LoggersConfig()
     trainer: TrainerConfig = TrainerConfig()
-
-    # optional configurations to deal with checkpointing and early stopping
-    checkpointing: Optional[CheckpointConfig] = None
+    checkpointing: Optional[CheckpointConfig] = sp.fval(
+        None, help="optional configurations to deal with checkpointing"
+    )
     early_stopping: Optional[EarlyStoppingConfig] = None
