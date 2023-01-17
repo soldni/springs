@@ -98,10 +98,10 @@ class CliFlags:
     config: Flag = Flag(
         name="config",
         help=(
-            "Either a path to a YAML file containing a configuration, or "
-            "a nickname for a configuration in the registry. "
-            "Multiple configurations can be specified with additional -c "
-            "flags, and they will be merged in the order they are provided."
+            "either a path to a YAML file containing a configuration, or "
+            "a nickname for a configuration in the registry; "
+            "multiple configurations can be specified with additional '-c' "
+            "flags, and they will be merged in the order they are provided"
         ),
         default=[],
         action="append",
@@ -109,24 +109,24 @@ class CliFlags:
     )
     options: Flag = Flag(
         name="options",
-        help="Print all default options and CLI flags.",
+        help="print all default options and CLI flags.",
         action="store_true",
     )
     inputs: Flag = Flag(
         name="inputs",
-        help="Print the input configuration.",
+        help="print the input configuration.",
         action="store_true",
     )
     parsed: Flag = Flag(
         name="parsed",
-        help="Print the parsed configuration.",
+        help="print the parsed configuration.",
         action="store_true",
     )
     log_level: Flag = Flag(
         name="log-level",
         help=(
-            "Logging level to use for this program. Can be one of "
-            "CRITICAL, ERROR, WARNING, INFO, or DEBUG. Defaults to WARNING."
+            "logging level to use for this program; can be one of "
+            "CRITICAL, ERROR, WARNING, INFO, or DEBUG; defaults to WARNING"
         ),
         default="WARNING",
         nargs=1,
@@ -134,30 +134,30 @@ class CliFlags:
     )
     debug: Flag = Flag(
         name="debug",
-        help="Enable debug mode; equivalent to '--log-level DEBUG'.",
+        help="enable debug mode; equivalent to '--log-level DEBUG'",
         action="store_true",
     )
     quiet: Flag = Flag(
         name="quiet",
-        help="If provided, it does not print the configuration when running.",
+        help="if provided, it does not print the configuration when running",
         action="store_true",
     )
     resolvers: Flag = Flag(
         name="resolvers",
         help=(
-            "Print all registered resolvers in OmegaConf, "
-            "Springs, and current codebase."
+            "print all registered resolvers in OmegaConf, "
+            "Springs, and current codebase"
         ),
         action="store_true",
     )
     nicknames: Flag = Flag(
         name="nicknames",
-        help="Print all registered nicknames in Springs.",
+        help="print all registered nicknames in Springs",
         action="store_true",
     )
     save: Flag = Flag(
         name="save",
-        help="Save the configuration to a YAML file and exit.",
+        help="save the configuration to a YAML file and exit",
         default=None,
         nargs=1,
         metavar="/path/to/destination.yaml",
