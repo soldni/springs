@@ -352,7 +352,7 @@ class ConfigTreeParser:
                 + Text(text=": ", style=theme.r_leaf)
                 + Text(text=f"({type_name})", style=theme.r_leaf)
                 + Text(text=" = ", style=theme.r_leaf)
-                + Text(text=spec.value, style=theme.r_leaf)
+                + Text(text=str(spec.value), style=theme.r_leaf)
             )
 
             # Add help if available; print it a gray color and italic.
