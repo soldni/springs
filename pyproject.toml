@@ -1,10 +1,10 @@
 [project]
 name = "springs"
-version = "1.10.2"
-description = '''\
+version = "1.10.3"
+description = """\
     A set of utilities to create and manage typed configuration files \
     effectively, built on top of OmegaConf.\
-    '''
+    """
 authors = [
     {name = "Luca Soldaini", email = "luca@soldaini.net" }
 ]
@@ -21,7 +21,7 @@ dependencies = [
     "pathvalidate>=2.5.0",
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
