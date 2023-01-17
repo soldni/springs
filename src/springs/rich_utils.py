@@ -16,6 +16,9 @@ from .core import traverse
 from .utils import SpringsConfig
 
 
+GREY = "grey74"
+
+
 def add_pretty_traceback(**install_kwargs: Any) -> None:
     if SpringsConfig.RICH_TRACEBACK_INSTALLED:
         return
@@ -86,58 +89,83 @@ def print_config_as_tree(
     trees: Dict[str, Tree] = {"": root}
     nodes_order: Dict[str, Dict[str, int]] = {}
 
+    # STEP 1: We start by adding all nodes to the tree; a node is a
+    #         DictConfig or ListConfig that has children.
     all_nodes = sorted(
         traverse(config, include_nodes=True, include_leaves=False),
         key=lambda spec: spec.path.count("."),
     )
-
     for spec in all_nodes:
         parent_path = get_parent_path(spec.path)
         tree = trees.get(parent_path, None)
         if spec.key is None or tree is None:
             raise ValueError("Cannot print disjoined tree")
 
+        # color is different for DictConfig and ListConfig
         l_color = "magenta" if isinstance(spec.value, DictConfig) else "cyan"
         l_text = spec.key if isinstance(spec.key, str) else f"[{spec.key}]"
         label = f"[bold {l_color}]{l_text}[/bold {l_color}]"
 
+        # Add help if available; make it same color as the key, but italic
+        # instead of bold. Note that we print the help iff print_help is True.
+        # We also remove any newlines and extra spaces from the help using
+        # a regex expression.
         if spec.help and print_help:
             l_help = re.sub(r"\s+", " ", spec.help.strip())
             label = f"{label}\n[{l_color} italic]({l_help})[/italic {l_color}]"
 
+        # Actually adding the node here!
         subtree = tree.add(label=label)
+
+        # We need to keep track of each node in the tree separately; this
+        # is so that we can attach the leaves to the correct node later.
         trees[spec.path] = subtree
+
+        # This helps us remember the order nodes appear in the config
+        # created by the user. We use this to sort the nodes in the tree
+        # before printing.
         nodes_order.setdefault(parent_path, {})[label] = spec.position
 
-    for spec in traverse(config, include_nodes=False, include_leaves=True):
+    # STEP 2: We now add all leaves to the tree; a leaf is anything that
+    #         is not a DictConfig or ListConfig.
+    all_leaves = sorted(
+        traverse(config, include_nodes=False, include_leaves=True),
+        key=lambda spec: str(spec.key),
+    )
+    for spec in all_leaves:
         parent_path = get_parent_path(spec.path)
         tree = trees.get(parent_path, None)
         if tree is None:
-            raise ValueError("Cannot print disjoined tree")
+            raise ValueError("Cannot find node for this leaf")
 
+        # Using '???' to indicate unknown type
         type_name = spec.type.__name__ if spec.type else "???"
         label = f"[bold]{spec.key}[/bold] ({type_name}) = {spec.value}"
+
+        # Add help if available; print it a gray color and italic.
         if spec.help and print_help:
             l_help = re.sub(r"\s+", " ", spec.help.strip())
-            l_color = "grey74"
-            label = f"{label}\n[{l_color} italic]({l_help})[/italic {l_color}]"
+            label = f"{label}\n[{GREY} italic]({l_help})[/{GREY} italic]"
 
+        # Actually adding the leaf here!
         tree.add(label=label)
+
+        # This helps us remember the order leaves appear in the config
+        # created by the user. We use this to sort the nodes in the tree
+        # before printing.
         nodes_order.setdefault(parent_path, {})[label] = spec.position
 
-    for label, tree in trees.items():
-        # sort nodes in each tree to match the order the appear in the config
-        tree.children.sort(
-            key=lambda child: nodes_order[label][str(child.label)]
-        )
+    # STEP 3: sort nodes in each tree to match the order the appear
+    #         in the config created by the user.
+    for l, t in trees.items():  # noqa: E741
+        t.children.sort(key=lambda child: nodes_order[l][str(child.label)])
 
-    if len(all_nodes) == 0:
-        # if there are no nodes, add a placeholder to indicate that
-        # the config is empty
-        root = Tree(
-            f"{root.label}\n  [italic][grey74](empty)[/grey74][/italic]"
-        )
+    # STEP 4: if there are no nodes or leaves in this configuration, add a
+    #         message to the tree that indicates that the config is empty.
+    if len(all_leaves) == len(all_nodes) == 0:
+        root = Tree(f"{root.label}\n  [{GREY} italic](empty)[/{GREY} italic]")
 
+    # time to print!
     panel = Panel(root, padding=0, border_style=Style(conceal=True))
     Console().print(panel)
 
