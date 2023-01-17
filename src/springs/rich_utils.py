@@ -92,7 +92,7 @@ class SpringsTheme:
 
     def __post_init__(self):
         if self.t_clr is MISSING:
-            self.t_clr = ["magenta", "yellow", "red", "green", "cyan", "blue"]
+            self.t_clr = ["magenta", "yellow", "red", "cyan", "green", "blue"]
 
         if self.t_cnt is MISSING:
             self.t_cnt = len(self.t_clr)
@@ -441,18 +441,20 @@ class TableParser:
 
         columns = (
             Column(
-                header=Text(f" {cl} ", style=co + theme.t_head),
+                header=f" {cl} ",
                 justify=vj,  # type: ignore
                 style=co + theme.t_body,
+                header_style=co + theme.t_head,
                 vertical=hj,  # type: ignore
             )
-            for i, (cl, vj, hj, co) in enumerate(
-                zip(columns, v_justify, h_justify, theme.t_colors)
+            for cl, vj, hj, co in zip(
+                columns, v_justify, h_justify, theme.t_colors
             )
         )
 
         table = Table(
             *columns,
+            padding=(0, 0),
             title=f"\n{title}" if title else None,
             min_width=min_width_outside_content,
             caption=caption,
@@ -460,6 +462,7 @@ class TableParser:
             caption_style=theme.r_help,
             box=(theme.b_show if borders else theme.b_hide),
             expand=True,
+            collapse_padding=True,
         )
         for row in values:
             table.add_row(*row)
