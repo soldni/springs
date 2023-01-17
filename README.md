@@ -15,6 +15,18 @@ To install Springs from [PyPI][6], simply run:
 pip install springs
 ```
 
+**Table of Contents**:
+
+- [Philosophy](#philosophy)
+- [A Note About Unstructured Configs](#a-note-about-unstructured-configs)
+- [Initializing Objects from Configurations](#initializing-objects-from-configurations)
+- [Static and Dynamic Type Checking](#static-and-dynamic-type-checking)
+- [Flexible Configurations](#flexible-configurations)
+- [Adding Help Messages to Configurations](#adding-help-messages-to-configurations)
+- [Command Line Options](#command-line-options)
+- [Tips and Tricks](#tips-and-tricks)
+
+
 ## Philosophy
 
 OmegaConf supports creating configurations in all sorts of manners, but we believe that there are benefits into defining configuration from structured objects, namely dataclass.
@@ -118,7 +130,7 @@ python main.py -c config.yaml
 Easy, right?
 
 
-### Fine, We Do Support Support Unstructured Configs!
+## A Note About Unstructured Configs
 
 You are not required to used a structured config with Springs.
 To use our CLI with a bunch of yaml files and/or command line arguments, simply decorate your main function with no arguments.
@@ -130,10 +142,9 @@ def main(config)
     ...
 ```
 
-### Initializing Object from Configurations
+## Initializing Objects from Configurations
 
-Sometimes a configuration contains all the necessary information to
-instantiate an object from it.
+Sometimes a configuration contains all the necessary information to instantiate an object from it.
 Springs supports this use case, and it is as easy as providing a `_target_` node in a configuration:
 
 ```python
@@ -181,7 +192,7 @@ fn('THIS TO LOWERCASE')
 
 Note that, for convenience `sp.init.now` is aliased to `sp.init`.
 
-### Path as `_target_`
+### Providing Class Paths as `_target_`
 
 If, for some reason, cannot specify the path to a class as a string, you can use `sp.Target.to_string` to resolve a function, class, or method to its path:
 
@@ -200,7 +211,7 @@ class ModelConfig:
     num_classes: int = 2
 ```
 
-### Static and Dynamic Type Checking
+## Static and Dynamic Type Checking
 
 Springs supports both static and dynamic (at runtime) type checking when initializing objects.
 To enable it, pass the expected return type when initializing an object:
@@ -216,8 +227,7 @@ def main(config: TokenizerConfig):
 
 This will raise an error when the tokenizer is not a subclass of `PreTrainedTokenizerBase`. Further, if you use a static type checker in your workflow (e.g., [Pylance][3] in [Visual Studio Code][4]), `springs.init` will also annotate its return type accordingly.
 
-
-### Flexible Configurations
+## Flexible Configurations
 
 Sometimes a configuration has some default parameters, but others are optional and depend on other factors, such as the `_target_` class.  In these cases, it is convenient to set up a flexible dataclass, using `make_flexy` after the `dataclass` decorator.
 
@@ -247,7 +257,7 @@ print(config)
 # }
 ```
 
-### Adding Help Messages to Your Configurations
+## Adding Help Messages to Configurations
 
 Springs supports adding help messages to your configurations; this is useful to provide a description of parameters to users of your application.
 
@@ -286,24 +296,23 @@ if __name__ == '__main__':
 
 As you can see, you can also add help messages to nested configurations. Help messages are printed when you call `python my_script.py --options` or `python my_script.py --o`.
 
-### Printing All Command Line Options
+## Command Line Options
 
 You can print all command line options by calling `python my_script.py -h` or `python my_script.py --help`. Currently, a Springs application supports the following:
 
 |Flag | Default | Action | Description|
 |----:|:-------:|:------:|:-----------|
-|-h/--help | `False` | toggle | show this help message and exit|
-|-c/--config | `[]` | append | Either a path to a YAML file containing a configuration, or a nickname for a configuration in the registry. Multiple configurations can be specified with additional -c flags, and they will be merged in the order they are provided.|
-|-o/--options | `False` | toggle | Print all default options and CLI flags.|
-|-i/--inputs | `False` | toggle | Print the input configuration.|
-|-p/--parsed | `False` | toggle | Print the parsed configuration.|
-|-l/--log-level | `WARNING` | set | Logging level to use for this program. Can be one of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`. Defaults to `WARNING`.|
-|-d/--debug | `False` |toggle| Enable debug mode; equivalent to `--log-level DEBUG`.|
-|-q/--quiet | `False` |toggle| If provided, it does not print the configuration when running.|
-|-r/--resolvers | `False` |toggle| Print all registered resolvers in OmegaConf, Springs, and current codebase.|
-|-n/--nicknames | `False` |toggle| Print all registered nicknames in Springs.|
-|-s/--save | `None` | set | Save the configuration to a YAML file and exit.|
-
+|`-h/--help` | `False` | toggle | show this help message and exit|
+|`-c/--config` | `[]` | append | Either a path to a YAML file containing a configuration, or a nickname for a configuration in the registry. Multiple configurations can be specified with additional -c flags, and they will be merged in the order they are provided.|
+|`-o/--options` | `False` | toggle | Print all default options and CLI flags.|
+|`-i/--inputs` | `False` | toggle | Print the input configuration.|
+|`-p/--parsed` | `False` | toggle | Print the parsed configuration.|
+|`-l/--log-level` | `WARNING` | set | Logging level to use for this program. Can be one of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`. Defaults to `WARNING`.|
+|`-d/--debug` | `False` |toggle| Enable debug mode; equivalent to `--log-level DEBUG`.|
+|`-q/--quiet` | `False` |toggle| If provided, it does not print the configuration when running.|
+|`-r/--resolvers` | `False` |toggle| Print all registered resolvers in OmegaConf, Springs, and current codebase.|
+|`-n/--nicknames` | `False` |toggle| Print all registered nicknames in Springs.|
+|`-s/--save` | `None` | set | Save the configuration to a YAML file and exit.|
 
 ## Tips and Tricks
 
