@@ -130,7 +130,6 @@ def main(config)
     ...
 ```
 
-
 ### Initializing Object from Configurations
 
 Sometimes a configuration contains all the necessary information to
@@ -247,6 +246,64 @@ print(config)
 #    'num_classes': 2
 # }
 ```
+
+### Adding Help Messages to Your Configurations
+
+Springs supports adding help messages to your configurations; this is useful to provide a description of parameters to users of your application.
+
+To add a help for a parameter, simply pass `help=...` to a field constructor:
+
+```python
+@sp.dataclass
+class ModelConfig:
+    _target_: str = sp.field(
+        default='transformers.'\
+            'AutoModelForSequenceClassification.'\
+            'from_pretrained',
+        help='The class for the model'
+    )
+    pretrained_model_name_or_path: str = sp.field(
+        default='bert-base-uncased',
+        help='The name of the model to use'
+    )
+    num_classes: int = sp.field(
+        help='The number of classes for classification'
+    )
+
+@sp.dataclass
+class ExperimentConfig:
+    model: ModelConfig = sp.field(
+        help='The model configuration'
+    )
+
+@sp.cli(ExperimentConfig)
+def main(config: ExperimentConfig):
+    ...
+
+if __name__ == '__main__':
+    main()
+```
+
+As you can see, you can also add help messages to nested configurations. Help messages are printed when you call `python my_script.py --options` or `python my_script.py --o`.
+
+### Printing All Command Line Options
+
+You can print all command line options by calling `python my_script.py -h` or `python my_script.py --help`. Currently, a Springs application supports the following:
+
+|Flag | Default | Action | Description|
+|----:|:-------:|:------:|:-----------|
+|-h/--help | `False` | toggle | show this help message and exit|
+|-c/--config | `[]` | append | Either a path to a YAML file containing a configuration, or a nickname for a configuration in the registry. Multiple configurations can be specified with additional -c flags, and they will be merged in the order they are provided.|
+|-o/--options | `False` | toggle | Print all default options and CLI flags.|
+|-i/--inputs | `False` | toggle | Print the input configuration.|
+|-p/--parsed | `False` | toggle | Print the parsed configuration.|
+|-l/--log-level | `WARNING` | set | Logging level to use for this program. Can be one of `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`. Defaults to `WARNING`.|
+|-d/--debug | `False` |toggle| Enable debug mode; equivalent to `--log-level DEBUG`.|
+|-q/--quiet | `False` |toggle| If provided, it does not print the configuration when running.|
+|-r/--resolvers | `False` |toggle| Print all registered resolvers in OmegaConf, Springs, and current codebase.|
+|-n/--nicknames | `False` |toggle| Print all registered nicknames in Springs.|
+|-s/--save | `None` | set | Save the configuration to a YAML file and exit.|
+
 
 ## Tips and Tricks
 
