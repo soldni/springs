@@ -92,7 +92,6 @@ class Flag:
         if self.metavar is not MISSING:
             kwargs["metavar"] = self.metavar
 
-
         return parser.add_argument(self.short, self.long, **kwargs)
 
     @property
@@ -100,7 +99,7 @@ class Flag:
         try:
             return self.__flag_value__
         except AttributeError:
-            raise RuntimeError('Flag value not set.')
+            raise RuntimeError("Flag value not set.")
 
     @value.setter
     def value(self, value: Any) -> None:
@@ -207,7 +206,7 @@ class CliFlags:
         try:
             return self.__leftovers__
         except AttributeError:
-            raise RuntimeError('Leftovers not set.')
+            raise RuntimeError("Leftovers not set.")
 
     @leftovers.setter
     def leftovers(self, value: List[str]) -> None:
@@ -220,7 +219,7 @@ class CliFlags:
             flag.value = opts[flag.dest]
 
     @classmethod
-    def parse_args(cls, func: Callable, name: str) -> 'CliFlags':
+    def parse_args(cls, func: Callable, name: str) -> "CliFlags":
         """Parses the arguments and returns the namespace."""
 
         ap = (cli_flags := cls()).make_cli(func=func, name=name)
@@ -539,7 +538,9 @@ def cli(
 
             # Parse the input config(s)
             config = parse_input_config(
-                func=func, flags=flags, config_node=config_node,
+                func=func,
+                flags=flags,
+                config_node=config_node,
             )
 
             # Call the main function
