@@ -1,6 +1,6 @@
 import re
 import sys
-from argparse import Action
+from argparse import Action, Namespace
 from dataclasses import dataclass, fields, is_dataclass
 from inspect import getfullargspec, isclass
 from pathlib import Path
@@ -9,6 +9,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    List,
     Optional,
     Sequence,
     Type,
@@ -66,6 +67,10 @@ class Flag:
         return f"-{self.name[0]}"
 
     @property
+    def dest(self) -> str:
+        return self.name.replace("-", "_")
+
+    @property
     def usage(self) -> str:
         extras = (
             "" if self.usage_extras is MISSING else f" {self.usage_extras}"
@@ -77,7 +82,7 @@ class Flag:
         return f"--{self.name}"
 
     def add_argparse(self, parser: RichArgumentParser) -> Action:
-        kwargs: Dict[str, Any] = {"help": self.help}
+        kwargs: Dict[str, Any] = {"help": self.help, "dest": self.dest}
         if self.action is not MISSING:
             kwargs["action"] = self.action
         if self.default is not MISSING:
@@ -87,7 +92,19 @@ class Flag:
         if self.metavar is not MISSING:
             kwargs["metavar"] = self.metavar
 
+
         return parser.add_argument(self.short, self.long, **kwargs)
+
+    @property
+    def value(self) -> Any:
+        try:
+            return self.__flag_value__
+        except AttributeError:
+            raise RuntimeError('Flag value not set.')
+
+    @value.setter
+    def value(self, value: Any) -> None:
+        self.__flag_value__ = value
 
     def __str__(self) -> str:
         return f"{self.short}/{self.long}"
@@ -185,6 +202,35 @@ class CliFlags:
         self.add_argparse(ap)
         return ap
 
+    @property
+    def leftovers(self) -> List[str]:
+        try:
+            return self.__leftovers__
+        except AttributeError:
+            raise RuntimeError('Leftovers not set.')
+
+    @leftovers.setter
+    def leftovers(self, value: List[str]) -> None:
+        self.__leftovers__ = value
+
+    def add_opts(self, opts: Union[Dict[str, Any], Namespace]) -> None:
+        """Parses the options and sets the values of the flags."""
+        opts = vars(opts) if isinstance(opts, Namespace) else opts
+        for flag in self.flags:
+            flag.value = opts[flag.dest]
+
+    @classmethod
+    def parse_args(cls, func: Callable, name: str) -> 'CliFlags':
+        """Parses the arguments and returns the namespace."""
+
+        ap = (cli_flags := cls()).make_cli(func=func, name=name)
+
+        opts, leftovers = ap.parse_known_args()
+        cli_flags.leftovers = leftovers
+        cli_flags.add_opts(opts)
+
+        return cli_flags
+
 
 def check_if_callable_can_be_decorated(func: Callable):
     expected_args = getfullargspec(func).args
@@ -280,31 +326,25 @@ def load_from_file_or_nickname(
     return loaded_config
 
 
-def wrap_main_method(
-    func: Callable[Concatenate[Any, MP], RT],
-    name: str,
+def parse_input_config(
+    func: Callable[Concatenate[CT, MP], Any],
+    flags: CliFlags,
     config_node: DictConfig,
     *args: MP.args,
     **kwargs: MP.kwargs,
-) -> RT:
+) -> CT:
 
     if not isinstance(config_node, DictConfig):
         raise TypeError("Config node must be a DictConfig")
 
-    # Making sure I can decorate this function
-    check_if_callable_can_be_decorated(func=func)
-    check_if_valid_main_args(func=func, args=args)
-
-    # Get argument parser and arguments
-    ap = CliFlags().make_cli(func=func, name=name)
-    opts, leftover_args = ap.parse_known_args()
-
     # Checks if the args are a match for the 'path.to.key=value′ pattern
     # expected for configuration overrides.
-    validate_leftover_args(leftover_args)
+    validate_leftover_args(flags.leftovers)
 
     # setup logging level for the root logger
-    configure_logging(logging_level="DEBUG" if opts.debug else opts.log_level)
+    configure_logging(
+        logging_level="DEBUG" if flags.debug.value else flags.log_level.value
+    )
 
     # set up parsers for the various config nodes and tables
     tree_parser = ConfigTreeParser()
@@ -313,15 +353,15 @@ def wrap_main_method(
     # We don't run the main program if the user
     # has requested to print the any of the config.
     do_no_run = (
-        opts.options
-        or opts.inputs
-        or opts.parsed
-        or opts.resolvers
-        or opts.nicknames
-        or opts.save
+        flags.options.value
+        or flags.inputs.value
+        or flags.parsed.value
+        or flags.resolvers.value
+        or flags.nicknames.value
+        or flags.save.value
     )
 
-    if opts.resolvers:
+    if flags.resolvers.value:
         # relative import here not to mess things up
         from .resolvers import all_resolvers
 
@@ -337,7 +377,7 @@ def wrap_main_method(
             borders=True,
         )
 
-    if opts.nicknames:
+    if flags.nicknames.value:
         table_parser(
             title="Registered Nicknames",
             columns=["Nickname", "Path"],
@@ -351,7 +391,7 @@ def wrap_main_method(
         )
 
     # Print default options if requested py the user
-    if opts.options:
+    if flags.options.value:
         config_name = getattr(get_type(config_node), "__name__", None)
         tree_parser(
             title="Default Options",
@@ -366,12 +406,12 @@ def wrap_main_method(
 
     # load options from one or more config files; if multiple config files
     # are provided, the latter ones can override the former ones.
-    for config_file in opts.config:
+    for config_file in flags.config.value:
         # Load config file
         file_config = load_from_file_or_nickname(config_file)
 
         # print the configuration if requested by the user
-        if opts.inputs:
+        if flags.inputs.value:
             tree_parser(
                 title="Input From File",
                 subtitle=f"(path: '{config_file}')",
@@ -383,10 +423,10 @@ def wrap_main_method(
         accumulator_config = unsafe_merge(accumulator_config, file_config)
 
     # load options from cli
-    cli_config = from_options(leftover_args)
+    cli_config = from_options(flags.leftovers)
 
     # print the configuration if requested by the user
-    if opts.inputs:
+    if flags.inputs.value:
         tree_parser(
             title="Input From Command Line",
             config=cli_config,
@@ -397,7 +437,7 @@ def wrap_main_method(
     # so that cli takes precedence over config files.
     accumulator_config = unsafe_merge(accumulator_config, cli_config)
 
-    if do_no_run and not opts.parsed:
+    if do_no_run and not flags.parsed.value:
         # if the user hasn't requested to print the parsed config
         # and we are not running the main program, we can exit here.
         sys.exit(0)
@@ -408,25 +448,24 @@ def wrap_main_method(
     parsed_config = merge_and_catch(config_node, accumulator_config)
 
     # print it if requested
-    if not (opts.quiet) or opts.parsed:
+    if not (flags.quiet.value) or flags.parsed.value:
         tree_parser(
             title="Parsed Config",
             config=parsed_config,
             print_help=False,
         )
 
-    if opts.save is not None:
+    if flags.save.value is not None:
         # save the parsed config to a file
-        with open(opts.save, "w") as f:
+        with open(flags.save.value, "w") as f:
             f.write(to_yaml(parsed_config))
 
     if do_no_run:
         # we are not running because the user has requested to print
         # either the options, inputs, or parsed config.
         sys.exit(0)
-    else:
-        # we execute the main method and pass the parsed config to it
-        return func(parsed_config, *args, **kwargs)
+
+    return parsed_config
 
 
 def cli(
@@ -490,16 +529,21 @@ def cli(
 
     def wrapper(func: Callable[Concatenate[CT, MP], RT]) -> Callable[MP, RT]:
         def wrapping(*args: MP.args, **kwargs: MP.kwargs) -> RT:
-            # I could have used a functools.partial here, but defining
-            # my own function instead allows me to provide nice typing
-            # annotations for mypy.
-            return wrap_main_method(
-                func,
-                name,
-                config_node,
-                *args,
-                **kwargs,
+
+            # Making sure I can decorate this function
+            check_if_callable_can_be_decorated(func=func)
+            check_if_valid_main_args(func=func, args=args)
+
+            # Parse the command line arguments
+            flags = CliFlags.parse_args(func=func, name=name)
+
+            # Parse the input config(s)
+            config = parse_input_config(
+                func=func, flags=flags, config_node=config_node,
             )
+
+            # Call the main function
+            return func(config, *args, **kwargs)
 
         return wrapping
 
