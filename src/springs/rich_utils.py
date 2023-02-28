@@ -124,6 +124,12 @@ def add_pretty_traceback(**install_kwargs: Any) -> None:
 
 
 class RichArgumentParser(ArgumentParser):
+    theme: SpringsTheme
+    entrypoint: Optional[str]
+    arguments: Optional[str]
+    formatted: Dict[str, Any]
+    console_kwargs: Dict[str, Any]
+
     def __init__(
         self,
         *args,

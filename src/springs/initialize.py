@@ -385,8 +385,8 @@ class init(Generic[InitT, CallableT]):
             initializer, this function figures out the expected type using
             a combination of class annotations and __init__ annotations.
 
-            If the type the attribute should be cannot be determined, it
-            simply returns None.
+            If the type the attribute cannot be determined, it simply returns
+            None.
 
             An example:
 
@@ -418,12 +418,21 @@ class init(Generic[InitT, CallableT]):
                 return None
 
             if attr_name in (parent_anns := get_annotations(cls_)):
+                # this is good for cases where the attribute is annotated
+                # in the class definition
                 return parent_anns[attr_name]
 
-            if attr_name in (
-                parent_anns := inspect.getfullargspec(cls_).annotations
-            ):
-                return parent_anns[attr_name]
+            try:
+                # this fails on C types; we give up on nested initialization
+                # on those.
+                spec = inspect.getfullargspec(cls_)
+            except TypeError:
+                return None
+
+            if attr_name in spec.annotations:
+                # this is good for cases where the attribute is annotated
+                # in a function definition
+                return spec.annotations[attr_name]
 
             # this is the case where we cannot resolve anything
             return None
