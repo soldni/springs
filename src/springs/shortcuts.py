@@ -9,10 +9,11 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Type,
     TypeVar,
     Union,
 )
+
+from typing_extensions import ParamSpec
 
 from .field_utils import field
 from .flexyclasses import flexyclass
@@ -22,6 +23,7 @@ from .nicknames import NicknameRegistry, RegistryValue
 from .utils import SpringsConfig, SpringsWarnings
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def get_nickname(
@@ -45,9 +47,9 @@ def make_target(c: Callable) -> str:
     return Target.to_string(c)
 
 
-def nickname(name: str) -> Callable[[Type[T]], Type[T]]:
+def nickname(name: str) -> Callable[[T], T]:
     """Shortcut for springs.nicknames.NicknameRegistry.add"""
-    return NicknameRegistry.add(name)
+    return NicknameRegistry.add(name)  # type: ignore
 
 
 def scan(

@@ -5,13 +5,14 @@ from dataclasses import asdict, is_dataclass
 from functools import reduce
 from inspect import isclass
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Sequence, Tuple, TypeVar, Union
 from typing import cast as typing_cast
 from typing import overload
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.errors import MissingMandatoryValue
 from omegaconf.omegaconf import DictKeyType
+from typing_extensions import Concatenate, ParamSpec
 from yaml.scanner import ScannerError
 
 from .flexyclasses import FlexyClass
@@ -20,7 +21,10 @@ from .traversal import FailedParamSpec, traverse
 DEFAULT: Any = "***"
 
 
+T = TypeVar("T")
+R = TypeVar("R")
 C = TypeVar("C", bound=Union[DictConfig, ListConfig])
+PS = ParamSpec("PS")
 
 
 def cast(config: Any, copy: bool = False) -> DictConfig:
@@ -47,11 +51,28 @@ def from_none(*args: Any, **kwargs: Any) -> DictConfig:
     return OmegaConf.create()
 
 
+def _from_allow_none_or_skip(
+    fn: Callable[Concatenate[T, PS], R]
+) -> Callable[Concatenate[Union[T, DictConfig, ListConfig, None], PS], R]:
+    """Decorator that creates an empty config if the input is None,
+    or returns the input if it is already a DictConfig or ListConfig"""
+
+    def wrapped(
+        config: Union[T, None], *args: PS.args, **kwargs: PS.kwargs
+    ) -> R:
+        if config is None:
+            return from_none()
+        if isinstance(config, (DictConfig, ListConfig)):
+            return config
+
+        return fn(config, *args, **kwargs)
+
+    return wrapped
+
+
+@_from_allow_none_or_skip
 def from_dataclass(config: Any) -> DictConfig:
     """Cast a dataclass to a structured omega config"""
-    if config is None:
-        return from_none()
-
     if isclass(config) and issubclass(config, FlexyClass):
         config = config.defaults()
 
@@ -77,6 +98,7 @@ def from_python(config: List[Any]) -> ListConfig:
     ...
 
 
+@_from_allow_none_or_skip  # type: ignore
 def from_python(
     config: Union[Dict[DictKeyType, Any], Dict[str, Any], List[Any]]
 ) -> Union[DictConfig, ListConfig]:
@@ -94,6 +116,7 @@ def from_python(
     return parsed_config
 
 
+@_from_allow_none_or_skip
 def from_dict(
     config: Union[Dict[DictKeyType, Any], Dict[str, Any]]
 ) -> DictConfig:
@@ -104,6 +127,7 @@ def from_dict(
     return from_python(config)  # type: ignore
 
 
+@_from_allow_none_or_skip
 def from_string(config: str) -> DictConfig:
     """Load a config from a string"""
     if not isinstance(config, str):
@@ -116,6 +140,7 @@ def from_string(config: str) -> DictConfig:
     return parsed_config
 
 
+@_from_allow_none_or_skip
 def from_file(path: Union[str, Path]) -> DictConfig:
     """Load a config from a file, either YAML or JSON"""
     path = Path(path)
@@ -142,6 +167,7 @@ def from_file(path: Union[str, Path]) -> DictConfig:
     return config
 
 
+@_from_allow_none_or_skip
 def from_options(opts: Sequence[str]) -> DictConfig:
     """Create a config from a list of options"""
     if not isinstance(opts, abc.Sequence) or not all(
