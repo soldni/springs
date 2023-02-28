@@ -5,16 +5,15 @@ from dataclasses import asdict, is_dataclass
 from functools import reduce
 from inspect import isclass
 from pathlib import Path
-from typing import (
-    Any, Dict, List, Sequence, Tuple, TypeVar, Union, Callable,
-    cast as typing_cast, overload
-)
+from typing import Any, Callable, Dict, List, Sequence, Tuple, TypeVar, Union
+from typing import cast as typing_cast
+from typing import overload
 
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.errors import MissingMandatoryValue
 from omegaconf.omegaconf import DictKeyType
+from typing_extensions import Concatenate, ParamSpec
 from yaml.scanner import ScannerError
-from typing_extensions import ParamSpec, Concatenate
 
 from .flexyclasses import FlexyClass
 from .traversal import FailedParamSpec, traverse
@@ -25,7 +24,7 @@ DEFAULT: Any = "***"
 T = TypeVar("T")
 R = TypeVar("R")
 C = TypeVar("C", bound=Union[DictConfig, ListConfig])
-PS = ParamSpec('PS')
+PS = ParamSpec("PS")
 
 
 def cast(config: Any, copy: bool = False) -> DictConfig:
@@ -59,9 +58,7 @@ def _from_allow_none_or_skip(
     or returns the input if it is already a DictConfig or ListConfig"""
 
     def wrapped(
-        config: Union[T, None],
-        *args: PS.args,
-        **kwargs: PS.kwargs
+        config: Union[T, None], *args: PS.args, **kwargs: PS.kwargs
     ) -> R:
         if config is None:
             return from_none()
@@ -101,7 +98,7 @@ def from_python(config: List[Any]) -> ListConfig:
     ...
 
 
-@_from_allow_none_or_skip   # type: ignore
+@_from_allow_none_or_skip  # type: ignore
 def from_python(
     config: Union[Dict[DictKeyType, Any], Dict[str, Any], List[Any]]
 ) -> Union[DictConfig, ListConfig]:

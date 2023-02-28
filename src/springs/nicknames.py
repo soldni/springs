@@ -1,8 +1,8 @@
+import inspect
 from dataclasses import is_dataclass
 from inspect import isclass
 from pathlib import Path
 from typing import (
-    Any,
     Callable,
     Dict,
     Literal,
@@ -13,22 +13,22 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
     overload,
 )
+
+from omegaconf import MISSING, DictConfig, ListConfig
 from typing_extensions import ParamSpec
 
-from omegaconf import DictConfig, ListConfig
-
-from .core import from_file
+from .core import from_dict, from_file
 from .flexyclasses import FlexyClass
 from .logging import configure_logging
 
-RegistryValue = Union[Type[Any], Type[FlexyClass], DictConfig, ListConfig]
+RegistryValue = Union[Callable, Type[FlexyClass], DictConfig, ListConfig]
+# M = TypeVar("M", bound=RegistryValue)
 
 T = TypeVar("T")
-M = TypeVar("M", bound=RegistryValue)
 P = ParamSpec("P")
+
 
 LOGGER = configure_logging(__name__)
 
@@ -87,38 +87,62 @@ class NicknameRegistry:
                 LOGGER.warning(f"Could not load config from {path}")
 
     @classmethod
-    def _add(cls, name: str, config: M) -> M:
+    def _add(cls, name: str, config: RegistryValue) -> RegistryValue:
         cls.__registry__[name] = config
         return config
 
-    # @overload
-    # @classmethod
-    # def add(cls, name: str) -> Callable[[Type[T]], Type[T]]:
-    #     ...
+    @overload
+    @classmethod
+    def add(cls, name: str) -> Callable[[Type[T]], Type[T]]:
+        ...
 
-    # @overload
-    # @classmethod
-    # def add(cls, name: str) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    #     ...
+    @overload
+    @classmethod
+    def add(  # type: ignore
+        cls, name: str
+    ) -> Callable[[Callable[P, T]], Callable[P, T]]:
+        ...
 
     @classmethod
-    def add(cls, name: str) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    def add(
+        cls, name: str
+    ) -> Union[
+        Callable[[Type[T]], Type[T]],
+        Callable[[Callable[P, T]], Callable[P, T]],
+    ]:
         """Decorator to save a structured configuration with a nickname
         for easy reuse."""
 
-        def add_to_registry(cls_: Callable[P, T]) -> Callable[P, T]:
-            if is_dataclass(cls_):
-                pass
-            elif isclass(cls_) and issubclass(cls_, FlexyClass):
-                pass
+        if name in cls.__registry__:
+            raise ValueError(f"{name} is already registered")
+
+        def add_to_registry(
+            cls_or_fn: Union[Type[T], Callable[P, T]]
+        ) -> Union[Type[T], Callable[P, T]]:
+            if is_dataclass(cls_or_fn):
+                # Pylance complains about dataclasses not being a valid type,
+                # but the problem is DataclassInstance is only defined within
+                # Pylance, so I can't type annotate with that.
+                cls._add(name, cls_or_fn)  # pyright: ignore
+            elif isclass(cls_or_fn) and issubclass(cls_or_fn, FlexyClass):
+                cls._add(name, cls_or_fn)
             else:
-                raise ValueError(f"{cls_} must be a dataclass")
+                from .initialize import Target, init
 
-            if name in cls.__registry__:
-                raise ValueError(f"{name} is already registered")
-            return cls._add(name, cls_)
+                sig = inspect.signature(cls_or_fn)
+                entry = from_dict(
+                    {
+                        init.TARGET: Target.to_string(cls_or_fn),
+                        **{
+                            k: (v.default if v.default != v.empty else MISSING)
+                            for k, v in sig.parameters.items()
+                        },
+                    }
+                )
+                cls._add(name, entry)
+            return cls_or_fn  # type: ignore
 
-        return add_to_registry
+        return add_to_registry  # type: ignore
 
     @overload
     @classmethod
@@ -147,7 +171,7 @@ class NicknameRegistry:
         return [
             (
                 name,
-                getattr(config, '__name__', type(config).__name__)
+                getattr(config, "__name__", type(config).__name__)
                 if is_dataclass(config)
                 else type(config).__name__,
             )
