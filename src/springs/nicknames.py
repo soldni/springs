@@ -1,4 +1,5 @@
 import inspect
+import json
 from dataclasses import is_dataclass
 from inspect import isclass
 from pathlib import Path
@@ -19,7 +20,7 @@ from typing import (
 from omegaconf import MISSING, DictConfig, ListConfig
 from typing_extensions import ParamSpec
 
-from .core import from_dict, from_file
+from .core import from_dict, from_file, to_python
 from .flexyclasses import FlexyClass
 from .logging import configure_logging
 
@@ -166,14 +167,18 @@ class NicknameRegistry:
             raise ValueError(f"{name} is not registered as a nickname")
         return cls.__registry__.get(name, None)
 
+    @staticmethod
+    def convert_nickname_value_to_string(config: RegistryValue) -> str:
+        if is_dataclass(config):
+            return getattr(config, "__name__", type(config).__name__)
+        elif isinstance(config, (DictConfig, ListConfig)):
+            return json.dumps(to_python(config), indent=2)
+        else:
+            return type(config).__name__
+
     @classmethod
     def all(cls) -> Sequence[Tuple[str, str]]:
         return [
-            (
-                name,
-                getattr(config, "__name__", type(config).__name__)
-                if is_dataclass(config)
-                else type(config).__name__,
-            )
+            (name, cls.convert_nickname_value_to_string(config))
             for name, config in cls.__registry__.items()
         ]

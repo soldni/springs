@@ -19,7 +19,7 @@ from typing import (
 from get_annotations import get_annotations
 from omegaconf import DictConfig, OmegaConf
 
-from .core import cast
+from .core import cast, to_python
 from .utils import SpringsWarnings, clean_multiline
 
 
@@ -441,7 +441,7 @@ class init(Generic[InitT, CallableT]):
             str(k): _recursive_init(
                 param=v, type_=_find_child_type(cls_=_type_, attr_name=str(k))
             )
-            for k, v in {**config_node, **kwargs}.items()
+            for k, v in {**to_python(config_node), **kwargs}.items()
             # we already extracted the target callable, so we don't need it
             if k != cls.TARGET
         }

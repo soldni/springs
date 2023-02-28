@@ -341,6 +341,7 @@ def wrap_main_method(
         table_parser(
             title="Registered Nicknames",
             columns=["Nickname", "Path"],
+            v_justify=["center", "left"],
             values=NicknameRegistry().all(),
             caption=(
                 "Nicknames are invoked via: "
