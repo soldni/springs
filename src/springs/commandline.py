@@ -129,7 +129,6 @@ class CliFlags:
             "CRITICAL, ERROR, WARNING, INFO, or DEBUG; defaults to WARNING"
         ),
         default="WARNING",
-        nargs=1,
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
     )
     debug: Flag = Flag(
@@ -159,7 +158,6 @@ class CliFlags:
         name="save",
         help="save the configuration to a YAML file and exit",
         default=None,
-        nargs=1,
         metavar="/path/to/destination.yaml",
     )
 
