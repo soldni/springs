@@ -2,6 +2,7 @@ import inspect
 import json
 from dataclasses import is_dataclass
 from inspect import isclass
+from logging import getLogger
 from pathlib import Path
 from typing import (
     Callable,
@@ -19,7 +20,6 @@ from typing import (
 
 from omegaconf import MISSING, DictConfig, ListConfig
 from typing_extensions import ParamSpec
-from logging import getLogger
 
 from .core import from_dict, from_file, to_python
 from .flexyclasses import FlexyClass

@@ -1,8 +1,8 @@
 import hashlib
 import inspect
-from logging import getLogger
 import pickle
 from functools import reduce, wraps
+from logging import getLogger
 from pathlib import Path
 from typing import Callable, Optional, Tuple, TypeVar, Union
 
