@@ -6,7 +6,6 @@ from springs.memoizer import memoize
 
 class TestMemoize(unittest.TestCase):
     def test_memoize_function(self):
-
         with TemporaryDirectory() as d:
 
             @memoize(cachedir=d)

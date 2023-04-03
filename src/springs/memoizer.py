@@ -51,7 +51,6 @@ def memoize(
     full_cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _memoize(func: Callable[P, R]) -> Callable[P, R]:
-
         # get the fully specified function name
         function_name = Target.to_string(func)
 
@@ -61,7 +60,6 @@ def memoize(
 
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-
             # we accumulate all arguments in a hash here; we also use the
             # fully specified function name to derive a filename at which
             # to cache.
@@ -76,7 +74,6 @@ def memoize(
             # we iterate over the arguments and add them to the hash unless
             # the are either a class instance or a function.
             for i, (k, v) in enumerate(bounded_arguments.arguments.items()):
-
                 if i == 0 and (k == "self" or k == "cls"):
                     # we skip cls or self if they are the first argument
                     # provided.

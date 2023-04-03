@@ -54,7 +54,6 @@ def traverse(
     include_root: bool = False,
     recurse: bool = True,
 ) -> Iterator[ParamSpec]:
-
     help = HelpLookup(node)
 
     if include_root:
