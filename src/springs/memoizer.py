@@ -1,5 +1,6 @@
 import hashlib
 import inspect
+from logging import getLogger
 import pickle
 from functools import reduce, wraps
 from pathlib import Path
@@ -9,9 +10,8 @@ from platformdirs import user_cache_dir
 from typing_extensions import ParamSpec
 
 from .initialize import Target
-from .logging import configure_logging
 
-LOGGER = configure_logging(__file__)
+LOGGER = getLogger(__name__)
 
 P = ParamSpec("P")
 R = TypeVar("R")

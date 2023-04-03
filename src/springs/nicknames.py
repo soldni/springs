@@ -19,10 +19,10 @@ from typing import (
 
 from omegaconf import MISSING, DictConfig, ListConfig
 from typing_extensions import ParamSpec
+from logging import getLogger
 
 from .core import from_dict, from_file, to_python
 from .flexyclasses import FlexyClass
-from .logging import configure_logging
 
 RegistryValue = Union[Callable, Type[FlexyClass], DictConfig, ListConfig]
 # M = TypeVar("M", bound=RegistryValue)
@@ -31,7 +31,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-LOGGER = configure_logging(__name__)
+LOGGER = getLogger(__name__)
 
 
 class NicknameRegistry:
