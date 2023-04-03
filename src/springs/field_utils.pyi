@@ -13,7 +13,7 @@ def field(
     *,
     help: str | None = ...,
     omegaconf_ignore: bool = ...,
-    **kwargs
+    **kwargs,
 ) -> _T: ...
 @overload
 def field(
@@ -21,7 +21,7 @@ def field(
     *,
     help: str | None = ...,
     omegaconf_ignore: bool = ...,
-    **kwargs
+    **kwargs,
 ) -> _T: ...
 
 class HelpLookup:

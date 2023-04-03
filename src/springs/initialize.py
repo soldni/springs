@@ -24,7 +24,6 @@ from .utils import SpringsWarnings, clean_multiline
 
 
 class InitLater(functools.partial):
-
     # inherits slots from functools.partial
     __slots__ = ("type_",)
 

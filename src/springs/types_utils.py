@@ -36,7 +36,8 @@ NoneType: Type[None] = type(None)
 def is_union_annotation(type_: Any) -> bool:
     """Check wether `type_` is equivalent to `typing.Union[T, ...]`
 
-    From https://github.com/omry/omegaconf/blob/e95c2c76d2545a844794682108ded57fbf98f042/omegaconf/_utils.py#L195"""  # noqa: E501
+    From https://github.com/omry/omegaconf/blob/e95c2c76d2545a844794682108ded57fbf98f042/omegaconf/_utils.py#L195
+    """  # noqa: E501
     if sys.version_info >= (3, 10):
         if isinstance(type_, types.UnionType):
             return True
@@ -47,7 +48,8 @@ def resolve_optional(type_: Any) -> Tuple[bool, Any]:
     """Check whether `type_` is equivalent to `typing.Optional[T]`
     for some T.
 
-    From https://github.com/omry/omegaconf/blob/e95c2c76d2545a844794682108ded57fbf98f042/omegaconf/_utils.py#L202"""  # noqa: E501
+    From https://github.com/omry/omegaconf/blob/e95c2c76d2545a844794682108ded57fbf98f042/omegaconf/_utils.py#L202
+    """  # noqa: E501
     if is_union_annotation(type_):
         args = type_.__args__
         if NoneType in args:

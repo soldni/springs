@@ -152,7 +152,6 @@ class RichArgumentParser(ArgumentParser):
 
             for ag in self._action_groups:
                 for act in ag._group_actions:
-
                     if isinstance(act.metavar, str):
                         metavar = (act.metavar,)
                     elif act.metavar is None:

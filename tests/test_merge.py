@@ -7,7 +7,6 @@ from springs.core import edit_list, from_python, merge, to_python
 
 class TestMerge(unittest.TestCase):
     def test_merge_dicts(self):
-
         d1 = from_python({"a": {"c": 4, "d": 5}, "b": 2, "c": 3})
         d2 = from_python({"a": {"c": 6, "e": 7}, "b": {"f": 8}})
 

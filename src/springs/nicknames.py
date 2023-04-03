@@ -2,6 +2,7 @@ import inspect
 import json
 from dataclasses import is_dataclass
 from inspect import isclass
+from logging import getLogger
 from pathlib import Path
 from typing import (
     Callable,
@@ -22,7 +23,6 @@ from typing_extensions import ParamSpec
 
 from .core import from_dict, from_file, to_python
 from .flexyclasses import FlexyClass
-from .logging import configure_logging
 
 RegistryValue = Union[Callable, Type[FlexyClass], DictConfig, ListConfig]
 # M = TypeVar("M", bound=RegistryValue)
@@ -31,7 +31,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-LOGGER = configure_logging(__name__)
+LOGGER = getLogger(__name__)
 
 
 class NicknameRegistry:

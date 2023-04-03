@@ -33,7 +33,6 @@ def register(
     name: str, use_cache: bool = False
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     def _register(func: Callable[..., T]) -> Callable[..., T]:
-
         # will raise an error if the resolver is already registered
         OmegaConf.register_new_resolver(
             name=name, resolver=func, use_cache=use_cache, replace=False

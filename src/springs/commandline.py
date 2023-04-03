@@ -285,7 +285,6 @@ def wrap_main_method(
     *args: MP.args,
     **kwargs: MP.kwargs,
 ) -> RT:
-
     if not isinstance(config_node, DictConfig):
         raise TypeError("Config node must be a DictConfig")
 
