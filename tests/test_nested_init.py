@@ -15,13 +15,13 @@ class Outer:
         self.b = b
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class InnerConfig:
     _target_: str = Target.to_string(Inner)
     a: int = 1
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class OuterConfig:
     _target_: str = Target.to_string(Outer)
     a: InnerConfig = InnerConfig()

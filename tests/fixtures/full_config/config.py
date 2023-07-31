@@ -50,7 +50,7 @@ class DataConfig:
     test_splits_config: List[DataSplitConfig] = sp.field(default_factory=list)
 
 
-@sp.dataclass
+@sp.dataclass(unsafe_hash=True)
 class EnvironmentConfig:
     root_dir: Optional[str] = "~/plruns"
     run_name: Optional[str] = "sse"
@@ -58,7 +58,7 @@ class EnvironmentConfig:
     seed: int = 5663
 
 
-@sp.dataclass
+@sp.dataclass(unsafe_hash=True)
 class ModelConfig:
     _target_: str = "sse.models.TokenClassificationModule"
     tokenizer: HuggingFaceModuleConfig = HuggingFaceModuleConfig(
@@ -98,7 +98,7 @@ class TextLoggerConfig:
     version: str = ""
 
 
-@sp.dataclass
+@sp.dataclass(unsafe_hash=True)
 class LoggersConfig:
     graphic: GraphicLoggerConfig = GraphicLoggerConfig()
     text: TextLoggerConfig = TextLoggerConfig()
@@ -140,6 +140,11 @@ class SseConfig:
     checkpoint: Optional[str] = None
 
     # this controls training environment and data
+    # env: EnvironmentConfig = sp.fobj(EnvironmentConfig())
+    # data: DataConfig = sp.fobj(DataConfig(), help="Data configuration")
+    # model: ModelConfig = sp.fobj(ModelConfig())
+    # loggers: LoggersConfig = sp.fobj(LoggersConfig())
+    # trainer: TrainerConfig = sp.fobj(TrainerConfig())
     env: EnvironmentConfig = EnvironmentConfig()
     data: DataConfig = sp.fobj(DataConfig(), help="Data configuration")
     model: ModelConfig = ModelConfig()

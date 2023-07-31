@@ -7,7 +7,7 @@ from omegaconf.errors import ValidationError
 import springs as sp
 
 
-@sp.dataclass
+@sp.dataclass(unsafe_hash=True)
 class NestedConfig:
     value: int = 0
 

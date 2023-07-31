@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 import springs as sp
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class DataConfig:
     path: str = sp.MISSING
 
