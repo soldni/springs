@@ -91,7 +91,7 @@ class Flag:
 
     def __str__(self) -> str:
         return f"{self.short}/{self.long}"
-    
+
     def __hash__(self) -> int:
         return hash(str(self))
 
