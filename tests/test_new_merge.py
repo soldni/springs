@@ -7,8 +7,8 @@ from omegaconf import OmegaConf
 
 from springs import DictConfig
 from springs.core import merge
-from springs.flexyclasses import FlexyClass
 from springs.field_utils import field
+from springs.flexyclasses import FlexyClass
 
 
 @FlexyClass.flexyclass

@@ -17,7 +17,9 @@ class DataConfig:
 @sp.nickname("dev_config")
 @sp.dataclass
 class DevConfig:
-    data: DataConfig = sp.field(default_factory=lambda: DataConfig(path="/dev"))
+    data: DataConfig = sp.field(
+        default_factory=lambda: DataConfig(path="/dev")
+    )
     name: str = "dev"
     batch_size: int = 32
 
