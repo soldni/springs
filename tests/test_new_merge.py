@@ -1,6 +1,6 @@
 import pickle
 import unittest
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from omegaconf import OmegaConf
@@ -8,6 +8,7 @@ from omegaconf import OmegaConf
 from springs import DictConfig
 from springs.core import merge
 from springs.flexyclasses import FlexyClass
+from springs.field_utils import field
 
 
 @FlexyClass.flexyclass
@@ -16,10 +17,9 @@ class ObjNestedConfig:
 
 
 @FlexyClass.flexyclass
-@dataclass
 class ObjConfig:
     _target_: str = "springs.core"
-    nest: ObjNestedConfig = ObjNestedConfig()
+    nest: ObjNestedConfig = field(default_factory=ObjNestedConfig)
 
 
 @dataclass
@@ -33,7 +33,7 @@ class AppCfg:
     elsewhere: Optional[Any] = None
     foo: FooCfg = field(default_factory=FooCfg)
     bar: bool = False
-    c: ObjConfig = ObjConfig()
+    c: ObjConfig = field(default_factory=ObjConfig)
     cn: Dict[str, ObjConfig] = field(default_factory=dict)
 
 

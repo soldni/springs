@@ -11,6 +11,9 @@ class DT:
     foo: str = "bar"
 
 
+DT(foo="bar")
+
+
 class TestCreation(unittest.TestCase):
     def test_from_dict(self):
         self.assertEqual(

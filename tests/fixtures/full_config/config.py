@@ -1,9 +1,13 @@
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 import springs as sp
 
 PL = "pytorch_lightning"
+
+
+@sp.dataclass
+class SpringsConfig:
+    foo: int = 1
 
 
 @sp.flexyclass
@@ -20,7 +24,6 @@ class LoaderConfig:
 
 
 @sp.flexyclass
-@dataclass
 class HuggingFaceModuleConfig:
     _target_: str = sp.MISSING
     pretrained_model_name_or_path: str = "${backbone}"
@@ -33,7 +36,7 @@ class MapperConfig:
 
 @sp.dataclass
 class DataSplitConfig:
-    loader: LoaderConfig = LoaderConfig()
+    loader: LoaderConfig = sp.field(default_factory=LoaderConfig)
     mappers: List[MapperConfig] = sp.field(default_factory=list)
 
 
@@ -44,13 +47,13 @@ class DataConfig:
     num_workers: int = 0
     pin_memory: bool = False
     persistent_workers: bool = False
-    collator: TargetConfig = TargetConfig()
+    collator: TargetConfig = sp.field(default_factory=TargetConfig)
     train_splits_config: List[DataSplitConfig] = sp.field(default_factory=list)
     valid_splits_config: List[DataSplitConfig] = sp.field(default_factory=list)
     test_splits_config: List[DataSplitConfig] = sp.field(default_factory=list)
 
 
-@sp.dataclass(unsafe_hash=True)
+@sp.dataclass
 class EnvironmentConfig:
     root_dir: Optional[str] = "~/plruns"
     run_name: Optional[str] = "sse"
@@ -58,15 +61,21 @@ class EnvironmentConfig:
     seed: int = 5663
 
 
-@sp.dataclass(unsafe_hash=True)
+@sp.dataclass
 class ModelConfig:
     _target_: str = "sse.models.TokenClassificationModule"
-    tokenizer: HuggingFaceModuleConfig = HuggingFaceModuleConfig(
-        _target_="transformers.AutoTokenizer.from_pretrained"
+    tokenizer: HuggingFaceModuleConfig = sp.field(
+        default_factory=lambda: HuggingFaceModuleConfig(
+            _target_="transformers.AutoTokenizer.from_pretrained"
+        )
     )
-    transformer: HuggingFaceModuleConfig = HuggingFaceModuleConfig(
-        _target_=(
-            "transformers.AutoModelForSequenceClassification.from_pretrained"
+    transformer: HuggingFaceModuleConfig = sp.field(
+        default_factory=lambda: HuggingFaceModuleConfig(
+            _target_=(
+                "transformers."
+                "AutoModelForSequenceClassification."
+                "from_pretrained"
+            )
         )
     )
     val_loss_label: str = "val_loss"
@@ -98,10 +107,12 @@ class TextLoggerConfig:
     version: str = ""
 
 
-@sp.dataclass(unsafe_hash=True)
+@sp.dataclass
 class LoggersConfig:
-    graphic: GraphicLoggerConfig = GraphicLoggerConfig()
-    text: TextLoggerConfig = TextLoggerConfig()
+    graphic: GraphicLoggerConfig = sp.field(
+        default_factory=GraphicLoggerConfig
+    )
+    text: TextLoggerConfig = sp.field(default_factory=TextLoggerConfig)
 
 
 @sp.flexyclass
@@ -134,23 +145,19 @@ class TrainerConfig:
 @sp.dataclass
 class SseConfig:
     # base strings to control where models and tokenizers come from
-    backbone: Optional[str] = sp.fobj(
-        None, help="name of the transformers model to use"
+    backbone: Optional[str] = sp.field(
+        default=None, help="name of the transformers model to use"
     )
     checkpoint: Optional[str] = None
 
-    # this controls training environment and data
-    # env: EnvironmentConfig = sp.fobj(EnvironmentConfig())
-    # data: DataConfig = sp.fobj(DataConfig(), help="Data configuration")
-    # model: ModelConfig = sp.fobj(ModelConfig())
-    # loggers: LoggersConfig = sp.fobj(LoggersConfig())
-    # trainer: TrainerConfig = sp.fobj(TrainerConfig())
-    env: EnvironmentConfig = EnvironmentConfig()
-    data: DataConfig = sp.fobj(DataConfig(), help="Data configuration")
-    model: ModelConfig = ModelConfig()
-    loggers: LoggersConfig = LoggersConfig()
-    trainer: TrainerConfig = TrainerConfig()
-    checkpointing: Optional[CheckpointConfig] = sp.fval(
-        None, help="optional configurations to deal with checkpointing"
+    env: EnvironmentConfig = sp.field(default_factory=EnvironmentConfig)
+    data: DataConfig = sp.field(
+        default_factory=DataConfig, help="Data configuration"
+    )
+    model: ModelConfig = sp.field(default_factory=ModelConfig)
+    loggers: LoggersConfig = sp.field(default_factory=LoggersConfig)
+    trainer: TrainerConfig = sp.field(default_factory=TrainerConfig)
+    checkpointing: Optional[CheckpointConfig] = sp.field(
+        default=None, help="optional configurations to deal with checkpointing"
     )
     early_stopping: Optional[EarlyStoppingConfig] = None

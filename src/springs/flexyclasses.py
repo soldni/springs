@@ -9,18 +9,18 @@ from typing_extensions import dataclass_transform
 
 from .utils import get_annotations
 
-C = TypeVar("C", bound=Any)
+_C = TypeVar("_C", bound=Any)
 
 
-class FlexyClass(dict, Generic[C]):
+class FlexyClass(dict, Generic[_C]):
     """A FlexyClass is a dictionary with some default values assigned to it
     FlexyClasses are generally not used directly, but rather creating using
     the `flexyclass` decorator.
 
     NOTE: When instantiating a new FlexyClass object directly, the constructor
-    actually returns a `dataclasses.Field` object. This is for API consistency
-    with how dataclasses are used in a structured configuration. If you want to
-    access values in the FlexyClass directly, use FlexyClass.defaults property.
+    actually returns a `dict` object. This is for API consistency with how
+    dataclasses are used in a structured configuration. If you want to access
+    values in the FlexyClass directly, use FlexyClass.defaults property.
     """
 
     __origin__: type = dict
@@ -60,7 +60,8 @@ class FlexyClass(dict, Generic[C]):
         # to use flexyclasses in the same way they would use a dataclass.
         factory_dict: Dict[str, Any] = {}
         factory_dict = {**cls.defaults(), **kwargs}
-        return field(default_factory=lambda: factory_dict)
+        return factory_dict
+        # return field(default_factory=lambda: factory_dict)
 
     @classmethod
     def to_dict_config(cls, **kwargs: Any) -> DictConfig:
@@ -70,7 +71,7 @@ class FlexyClass(dict, Generic[C]):
         return from_dict({**cls.defaults(), **kwargs})
 
     @classmethod
-    def flexyclass(cls, target_cls: Type[C]) -> Type["FlexyClass"]:
+    def flexyclass(cls, target_cls: Type[_C]) -> Type["FlexyClass[_C]"]:
         """Decorator to create a FlexyClass from a class"""
 
         if is_dataclass(target_cls):
@@ -86,15 +87,16 @@ class FlexyClass(dict, Generic[C]):
             for f_name, f_value in attributes_iterator
         }
 
-        return type(
+        rt = type(
             target_cls.__name__,
             (FlexyClass,),
             {"__flexyclass_defaults__": defaults},
         )
+        return rt
 
 
-@dataclass_transform()
-def flexyclass(cls: Type[C]) -> Type[FlexyClass[C]]:
+@dataclass_transform(field_specifiers=(Field, field))
+def flexyclass(cls: Type[_C]) -> Type[FlexyClass[_C]]:
     """Alias for FlexyClass.flexyclass"""
     return FlexyClass.flexyclass(cls)
 

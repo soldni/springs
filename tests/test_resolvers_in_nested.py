@@ -7,14 +7,14 @@ from omegaconf.errors import ValidationError
 import springs as sp
 
 
-@sp.dataclass(unsafe_hash=True)
+@sp.dataclass
 class NestedConfig:
     value: int = 0
 
 
 @sp.dataclass
 class Config:
-    nested: NestedConfig = NestedConfig()
+    nested: NestedConfig = sp.field(default_factory=NestedConfig)
     li: List[NestedConfig] = sp.field(default_factory=list)
     di: Dict[str, NestedConfig] = sp.field(default_factory=dict)
 

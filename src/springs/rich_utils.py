@@ -2,7 +2,17 @@ import os
 import re
 from argparse import SUPPRESS, ArgumentParser
 from dataclasses import dataclass
-from typing import IO, Any, Dict, Generator, List, Optional, Sequence, Union
+from typing import (
+    IO,
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from omegaconf import DictConfig, ListConfig
 from rich import box
@@ -153,7 +163,7 @@ class RichArgumentParser(ArgumentParser):
             for ag in self._action_groups:
                 for act in ag._group_actions:
                     if isinstance(act.metavar, str):
-                        metavar = (act.metavar,)
+                        metavar: Tuple[str, ...] = (act.metavar,)
                     elif act.metavar is None:
                         metavar = (act.dest.upper(),)
                     else:

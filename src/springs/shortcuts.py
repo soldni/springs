@@ -73,37 +73,14 @@ def make_flexy(cls_: Any) -> Any:
     return flexyclass(cls_)
 
 
-def fval(value: T, **kwargs) -> T:
-    """Shortcut for creating a Field with a default value.
-
-    Args:
-        value: value returned by default factory"""
-
-    return field(default=value, **kwargs)
-
-
-def fobj(object: T, **kwargs) -> T:
-    """Shortcut for creating a Field with a default_factory that returns
-    a specific object.
-
-    Args:
-        obj: object returned by default factory"""
-
-    def _factory_fn() -> T:
-        # make a copy so that the same object isn't returned
-        # (it's a factory, not a singleton!)
-        return copy.deepcopy(object)
-
-    return field(default_factory=_factory_fn, **kwargs)
-
-
 def fdict(**kwargs: Any) -> Dict[str, Any]:
     """Shortcut for creating a Field with a default_factory that returns
     a dictionary.
 
     Args:
         **kwargs: values for the dictionary returned by default factory"""
-    return fobj(kwargs)
+    kwargs = copy.deepcopy(kwargs)
+    return field(default_factory=lambda: kwargs)
 
 
 def flist(*args: Any) -> List[Any]:
@@ -112,7 +89,8 @@ def flist(*args: Any) -> List[Any]:
 
     Args:
         *args: values for the list returned by default factory"""
-    return fobj(list(args))
+    l_args = list(copy.deepcopy(args))
+    return field(default_factory=lambda: l_args)
 
 
 def debug_logger(*args: Any, **kwargs: Any) -> Logger:

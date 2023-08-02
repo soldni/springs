@@ -30,6 +30,7 @@ from .core import (
     to_yaml,
     unsafe_merge,
 )
+from .field_utils import field
 from .flexyclasses import is_flexyclass
 from .logging import configure_logging
 from .nicknames import NicknameRegistry
@@ -94,13 +95,14 @@ class Flag:
     def __str__(self) -> str:
         return f"{self.short}/{self.long}"
 
-    def __hash__(self) -> int:
-        return hash(str(self))
+    @classmethod
+    def field(cls, *args, **kwargs) -> "Flag":
+        return field(default_factory=lambda: cls(*args, **kwargs))
 
 
 @dataclass
 class CliFlags:
-    config: Flag = Flag(
+    config: Flag = Flag.field(
         name="config",
         help=(
             "either a path to a YAML file containing a configuration, or "
@@ -112,22 +114,22 @@ class CliFlags:
         action="append",
         metavar="/path/to/config.yaml",
     )
-    options: Flag = Flag(
+    options: Flag = Flag.field(
         name="options",
         help="print all default options and CLI flags.",
         action="store_true",
     )
-    inputs: Flag = Flag(
+    inputs: Flag = Flag.field(
         name="inputs",
         help="print the input configuration.",
         action="store_true",
     )
-    parsed: Flag = Flag(
+    parsed: Flag = Flag.field(
         name="parsed",
         help="print the parsed configuration.",
         action="store_true",
     )
-    log_level: Flag = Flag(
+    log_level: Flag = Flag.field(
         name="log-level",
         help=(
             "logging level to use for this program; can be one of "
@@ -136,17 +138,17 @@ class CliFlags:
         default="WARNING",
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
     )
-    debug: Flag = Flag(
+    debug: Flag = Flag.field(
         name="debug",
         help="enable debug mode; equivalent to '--log-level DEBUG'",
         action="store_true",
     )
-    quiet: Flag = Flag(
+    quiet: Flag = Flag.field(
         name="quiet",
         help="if provided, it does not print the configuration when running",
         action="store_true",
     )
-    resolvers: Flag = Flag(
+    resolvers: Flag = Flag.field(
         name="resolvers",
         help=(
             "print all registered resolvers in OmegaConf, "
@@ -154,12 +156,12 @@ class CliFlags:
         ),
         action="store_true",
     )
-    nicknames: Flag = Flag(
+    nicknames: Flag = Flag.field(
         name="nicknames",
         help="print all registered nicknames in Springs",
         action="store_true",
     )
-    save: Flag = Flag(
+    save: Flag = Flag.field(
         name="save",
         help="save the configuration to a YAML file and exit",
         default=None,

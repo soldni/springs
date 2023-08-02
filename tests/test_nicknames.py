@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 import springs as sp
 
 
-@dataclass(unsafe_hash=True)
+@dataclass
 class DataConfig:
     path: str = sp.MISSING
 
@@ -17,7 +17,7 @@ class DataConfig:
 @sp.nickname("dev_config")
 @sp.dataclass
 class DevConfig:
-    data: DataConfig = DataConfig(path="/dev")
+    data: DataConfig = sp.field(default_factory=lambda: DataConfig(path="/dev"))
     name: str = "dev"
     batch_size: int = 32
 
