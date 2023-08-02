@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import dataclass
 
-from springs.initialize import Target, init
+import springs as sp
 
 
 class Inner:
@@ -17,21 +17,21 @@ class Outer:
 
 @dataclass
 class InnerConfig:
-    _target_: str = Target.to_string(Inner)
+    _target_: str = sp.Target.to_string(Inner)
     a: int = 1
 
 
 @dataclass
 class OuterConfig:
-    _target_: str = Target.to_string(Outer)
-    a: InnerConfig = InnerConfig()
+    _target_: str = sp.Target.to_string(Outer)
+    a: InnerConfig = sp.field(default_factory=InnerConfig)
     b: int = 2
 
 
 class TestInit(unittest.TestCase):
     def test_nested_init(self):
         config = OuterConfig()
-        out = init.now(config, Outer)
+        out = sp.init.now(config, Outer)
 
         self.assertTrue(isinstance(out, Outer))
         self.assertTrue(isinstance(out.a, Inner))

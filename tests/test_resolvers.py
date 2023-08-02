@@ -20,4 +20,4 @@ class TestResolvers(unittest.TestCase):
         self.assertEqual(c.c, "___fooo___")
         self.assertEqual(c.d, c.b)
         self.assertEqual(c.e, "_f")
-        self.assertEqual(c.f, " fooo")
+        self.assertEqual(c.f, "fooo")

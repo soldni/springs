@@ -14,7 +14,7 @@ class NestedConfig:
 
 @sp.dataclass
 class Config:
-    nested: NestedConfig = NestedConfig()
+    nested: NestedConfig = sp.field(default_factory=NestedConfig)
     li: List[NestedConfig] = sp.field(default_factory=list)
     di: Dict[str, NestedConfig] = sp.field(default_factory=dict)
 
