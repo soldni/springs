@@ -1,3 +1,4 @@
+import functools
 import re
 import sys
 from argparse import Action
@@ -42,6 +43,7 @@ from .types_utils import get_type
 
 # parameters for the main function
 MP = ParamSpec("MP")
+NP = ParamSpec("NP")
 
 # type for the configuration
 CT = TypeVar("CT")
@@ -433,10 +435,8 @@ def wrap_main_method(
 def cli(
     config_node_cls: Optional[Type[CT]] = None,
 ) -> Callable[
-    [
-        # this is a main method that takes as first input a parsed config
-        Callable[Concatenate[CT, MP], RT]
-    ],
+    # this is a main method that takes as first input a parsed config
+    [Callable[Concatenate[CT, MP], RT]],
     # the decorated method doesn't expect the parsed config as first input,
     # since that will be parsed from the command line
     Callable[MP, RT],
@@ -490,6 +490,7 @@ def cli(
         name = config_node_cls.__name__
 
     def wrapper(func: Callable[Concatenate[CT, MP], RT]) -> Callable[MP, RT]:
+        @functools.wraps(func)
         def wrapping(*args: MP.args, **kwargs: MP.kwargs) -> RT:
             # I could have used a functools.partial here, but defining
             # my own function instead allows me to provide nice typing
@@ -504,4 +505,8 @@ def cli(
 
         return wrapping
 
-    return wrapper
+    # TODO: figure out why mypy complains with the following error:
+    #   Incompatible return value type (got "Callable[[Arg(Callable[[CT,
+    #   **MP], RT], 'func')], Callable[MP, RT]]", expected
+    #   "Callable[[Callable[[CT, **MP], RT]], Callable[MP, RT]]")
+    return wrapper  # type: ignore
